@@ -1,26 +1,37 @@
-# Presse Scraper (Mobile)
+# Presse Scraper (Application Android)
 
-Application mobile autonome et interface hybride (Capacitor/Android) pour le projet **Presse Scraper**. 
-Elle permet d'utiliser le partage natif Android pour scraper des articles depuis diverses applications de presse en s'appuyant sur un backend (read-scraper-api) et le protocole *Cookie-Relay* via la BnF.
+📰 **Presse Scraper** est une application Android permettant de lire des articles de presse sous paywall (Le Monde, Libération, Le Figaro, etc.) en s'appuyant sur votre abonnement à la **Bibliothèque nationale de France (BnF)**.
 
-## Fonctionnement
+Inspiré d'extensions comme *Ophirofox*, le principe est simple : lorsque vous êtes sur un article payant depuis votre navigateur ou l'application d'un journal, utilisez la fonction "Partager" d'Android et sélectionnez **Presse Scraper**. L'application se charge de se connecter à la plateforme **Europresse** (via vos accès BnF), de retrouver l'article complet, et de vous le fournir.
 
-- **Interface Hybride** : Application basée sur Capacitor (HTML/CSS/JS).
-- **Plugins Natifs** :
-  - `BnfLoginPlugin` : Connexion transparente en tâche de fond pour acquérir les cookies de session.
-  - `IntentForwarderPlugin` : Interception des partages natifs (URLs d'articles).
-  - `BackgroundPollPlugin` : Polling en arrière-plan de l'état du scraping, même lorsque l'application est suspendue.
+---
 
-Pour plus de détails techniques, veuillez consulter le fichier `FONCTIONNEMENT.md`.
+## 📥 Téléchargement
 
-## Build Android
+Vous pouvez télécharger la dernière version de l'application (le fichier `.apk` généré automatiquement) directement depuis la page des **Releases** :
 
-Le projet contient un workflow GitHub Actions pour compiler automatiquement l'APK à chaque push.
-En local, vous pouvez générer l'APK via :
+👉 **[Télécharger le dernier APK (Release)](https://github.com/muarf/pressscraper/releases/latest)**
 
-```bash
-npm install
-npx cap sync android
-cd android
-./gradlew assembleDebug
-```
+*(Note : Lors de l'installation, Android pourrait vous demander d'autoriser l'installation d'applications issues de sources inconnues).*
+
+---
+
+## ⚙️ Prérequis : Serveur Backend
+
+**Important :** Cette application mobile n'est que l'interface. Tout le travail lourd (la recherche intelligente, la navigation automatisée pour contourner les protections et la génération du PDF) est effectué par un serveur central.
+
+Pour que l'application fonctionne, vous devez posséder et configurer ce serveur backend :
+👉 **[Dépôt du serveur backend : read-scraper-api](https://github.com/muarf/read-scraper-api)**
+
+*(C'est au sein de l'application mobile que vous renseignerez ensuite l'URL de votre serveur ainsi que vos identifiants BnF).*
+
+---
+
+## 🛠️ Pour les développeurs
+
+L'application est hybride, développée avec **Ionic / Capacitor** (HTML/JS) enrichie avec du code natif Android (Java) pour permettre :
+- Une connexion invisible en tâche de fond pour récupérer la session BnF (*Cookie-Relay*).
+- L'interception des partages d'URL du système Android.
+- Le suivi (polling) de l'avancement de la création du PDF en arrière-plan.
+
+Pour tous les détails techniques sur l'architecture, référez-vous au fichier `FONCTIONNEMENT.md`.
