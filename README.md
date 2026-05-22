@@ -33,5 +33,3 @@ L'application est hybride, développée avec **Ionic / Capacitor** (HTML/JS) enr
 - Une connexion invisible en tâche de fond pour récupérer la session BnF (*Cookie-Relay*).
 - L'interception des partages d'URL du système Android.
 - Le suivi (polling) de l'avancement de la création du PDF en arrière-plan.
-
-Pour tous les détails techniques sur l'architecture, référez-vous au fichier `FONCTIONNEMENT.md`.
