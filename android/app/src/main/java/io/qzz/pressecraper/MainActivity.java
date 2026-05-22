@@ -12,16 +12,19 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
-        // Register custom plugins
+        // Register custom plugins before super.onCreate
         registerPlugin(BnfLoginPlugin.class);
+        registerPlugin(IntentForwarderPlugin.class);
+        registerPlugin(BackgroundPollPlugin.class);
+
+        super.onCreate(savedInstanceState);
 
         handleIntent(getIntent());
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
+        setIntent(intent);
         super.onNewIntent(intent);
         handleIntent(intent);
     }
@@ -30,12 +33,12 @@ public class MainActivity extends BridgeActivity {
         if (intent == null) return;
         String action = intent.getAction();
         String type = intent.getType();
-        Log.d(TAG, "Intent: action=" + action + " type=" + type);
+        Log.i(TAG, "Intent: action=" + action + " type=" + type);
 
         // Handle notification click - open specific article
         String openArticleId = intent.getStringExtra("openArticleId");
         if (openArticleId != null && !openArticleId.isEmpty()) {
-            Log.d(TAG, "Open article from notification: " + openArticleId);
+            Log.i(TAG, "Open article from notification: " + openArticleId);
             notifyJs("openArticle", openArticleId);
             return;
         }
@@ -45,7 +48,7 @@ public class MainActivity extends BridgeActivity {
                 String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
                 String sharedTitle = intent.getStringExtra(Intent.EXTRA_SUBJECT);
                 if (sharedText != null) {
-                    Log.d(TAG, "SEND text: " + sharedText);
+                    Log.i(TAG, "SEND text: " + sharedText);
                     notifyJs("sharedText", sharedText);
                 }
             }
@@ -53,7 +56,7 @@ public class MainActivity extends BridgeActivity {
             CharSequence processedText = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT);
             if (processedText != null) {
                 String text = processedText.toString();
-                Log.d(TAG, "PROCESS_TEXT: " + text);
+                Log.i(TAG, "PROCESS_TEXT: " + text);
                 notifyJs("sharedText", text);
                 Intent resultIntent = new Intent();
                 resultIntent.putExtra(Intent.EXTRA_PROCESS_TEXT, text);
@@ -62,7 +65,7 @@ public class MainActivity extends BridgeActivity {
         } else if (Intent.ACTION_VIEW.equals(action)) {
             String url = intent.getDataString();
             if (url != null) {
-                Log.d(TAG, "VIEW URL: " + url);
+                Log.i(TAG, "VIEW URL: " + url);
                 notifyJs("sharedUrl", url);
             }
         }
@@ -70,7 +73,9 @@ public class MainActivity extends BridgeActivity {
 
     private void notifyJs(String event, String data) {
         try {
-            getBridge().triggerWindowJSEvent(event, data);
+            String jsonData = "{\"url\":" + org.json.JSONObject.quote(data) + "}";
+            Log.i(TAG, "notifyJs event=" + event + " data=" + jsonData);
+            getBridge().triggerWindowJSEvent(event, jsonData);
         } catch (Exception e) {
             Log.e(TAG, "notifyJs error: " + e.getMessage());
         }

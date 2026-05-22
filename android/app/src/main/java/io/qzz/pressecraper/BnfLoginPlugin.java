@@ -22,6 +22,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
 @CapacitorPlugin(name = "BnfLogin")
 public class BnfLoginPlugin extends Plugin {
 
@@ -236,5 +242,203 @@ public class BnfLoginPlugin extends Plugin {
     private String escapeJs(String s) {
         if (s == null) return "";
         return s.replace("\\", "\\\\").replace("'", "\\'").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+    }
+
+    @PluginMethod()
+    public void httpRequest(PluginCall call) {
+        String urlStr = call.getString("url", "");
+        String method = call.getString("method", "GET");
+        JSObject bodyObj = call.getObject("body", null);
+        JSObject headersObj = call.getObject("headers", null);
+
+        if (urlStr.isEmpty()) {
+            JSObject result = new JSObject();
+            result.put("error", "URL required");
+            call.resolve(result);
+            return;
+        }
+
+        // Run on background thread
+        new Thread(() -> {
+            try {
+                URL url = new URL(urlStr);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod(method.toUpperCase());
+                conn.setConnectTimeout(30000);
+                conn.setReadTimeout(30000);
+
+                // Set headers
+                if (headersObj != null) {
+                    java.util.Iterator<String> keys = headersObj.keys();
+                    while (keys.hasNext()) {
+                        String key = keys.next();
+                        conn.setRequestProperty(key, headersObj.getString(key));
+                    }
+                }
+
+                // Set body for POST/PUT
+                String bodyStr = call.getString("body", null);
+                if (bodyStr != null && (method.equalsIgnoreCase("POST") || method.equalsIgnoreCase("PUT"))) {
+                    conn.setDoOutput(true);
+                    OutputStream os = conn.getOutputStream();
+                    os.write(bodyStr.getBytes("UTF-8"));
+                    os.flush();
+                    os.close();
+                }
+
+                int status = conn.getResponseCode();
+
+                // Read response
+                BufferedReader br;
+                if (status >= 400) {
+                    br = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
+                } else {
+                    br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                }
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) {
+                    sb.append(line);
+                }
+                br.close();
+
+                JSObject result = new JSObject();
+                result.put("status", status);
+                result.put("data", sb.toString());
+                call.resolve(result);
+
+            } catch (Exception e) {
+                Log.e(TAG, "httpRequest error", e);
+                JSObject result = new JSObject();
+                result.put("error", e.getMessage());
+                call.resolve(result);
+            }
+        }).start();
+    }
+
+    @PluginMethod()
+    public void downloadFile(PluginCall call) {
+        String urlStr = call.getString("url", "");
+        String filename = call.getString("filename", "download.pdf");
+
+        if (urlStr.isEmpty()) {
+            JSObject result = new JSObject();
+            result.put("error", "URL required");
+            call.resolve(result);
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                URL url = new URL(urlStr);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(30000);
+                conn.setReadTimeout(60000);
+
+                int status = conn.getResponseCode();
+                if (status != 200) {
+                    JSObject result = new JSObject();
+                    result.put("error", "HTTP " + status);
+                    call.resolve(result);
+                    return;
+                }
+
+                // Sauvegarder dans le dossier Downloads de l'app
+                java.io.File downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOCUMENTS);
+                if (!downloadsDir.exists()) downloadsDir.mkdirs();
+                java.io.File outFile = new java.io.File(downloadsDir, filename);
+
+                java.io.InputStream is = conn.getInputStream();
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(outFile);
+                byte[] buffer = new byte[8192];
+                int len;
+                while ((len = is.read(buffer)) != -1) {
+                    fos.write(buffer, 0, len);
+                }
+                fos.close();
+                is.close();
+
+                JSObject result = new JSObject();
+                result.put("success", true);
+                result.put("path", outFile.getAbsolutePath());
+                call.resolve(result);
+
+            } catch (Exception e) {
+                Log.e(TAG, "downloadFile error", e);
+                JSObject result = new JSObject();
+                result.put("error", e.getMessage());
+                call.resolve(result);
+            }
+        }).start();
+    }
+
+    @PluginMethod()
+    public void showNotification(PluginCall call) {
+        String title = call.getString("title", "Presse Scraper");
+        String body = call.getString("body", "");
+        String articleId = call.getString("articleId", "");
+
+        try {
+            android.app.NotificationManager notificationManager =
+                (android.app.NotificationManager) getContext().getSystemService(android.content.Context.NOTIFICATION_SERVICE);
+
+            // Create notification channel for Android O+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                    "presse_scraper", "Articles", android.app.NotificationManager.IMPORTANCE_DEFAULT);
+                channel.setDescription("Notifications d'articles téléchargés");
+                notificationManager.createNotificationChannel(channel);
+            }
+
+            // Build intent to open the app
+            android.content.Intent intent = new android.content.Intent(getContext(), MainActivity.class);
+            intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            if (articleId != null && !articleId.isEmpty()) {
+                intent.putExtra("openArticleId", articleId);
+            }
+
+            android.app.PendingIntent pendingIntent = android.app.PendingIntent.getActivity(
+                getContext(), 0, intent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+
+            // Build notification
+            androidx.core.app.NotificationCompat.Builder builder =
+                new androidx.core.app.NotificationCompat.Builder(getContext(), "presse_scraper")
+                    .setSmallIcon(android.R.drawable.ic_menu_info_details)
+                    .setContentTitle(title)
+                    .setContentText(body)
+                    .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
+                    .setContentIntent(pendingIntent)
+                    .setAutoCancel(true);
+
+            notificationManager.notify((int) System.currentTimeMillis(), builder.build());
+
+            JSObject result = new JSObject();
+            result.put("success", true);
+            call.resolve(result);
+        } catch (Exception e) {
+            Log.e(TAG, "showNotification error", e);
+            JSObject result = new JSObject();
+            result.put("error", e.getMessage());
+            call.resolve(result);
+        }
+    }
+
+    @PluginMethod()
+    public void requestNotificationPermission(PluginCall call) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ needs runtime permission
+            if (getContext().checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                // Request permission via activity
+                getActivity().requestPermissions(
+                    new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1001);
+            }
+        }
+        JSObject result = new JSObject();
+        result.put("success", true);
+        call.resolve(result);
     }
 }

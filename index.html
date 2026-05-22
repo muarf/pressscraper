@@ -135,6 +135,8 @@
         }
         .action-btn.primary { background: var(--accent); color: white; }
         .action-btn.secondary { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); }
+        .fallback-row { margin-top: 16px; text-align: left; background: var(--bg-secondary); padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
+        .fallback-row p { font-size: 12px; margin-bottom: 8px; color: var(--text-secondary); }
 
         /* History */
         .section-title { font-size: 14px; font-weight: 700; margin: 20px 0 12px; display: flex; align-items: center; gap: 8px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -163,6 +165,10 @@
         }
         .article-header .back-btn { background: none; border: none; color: var(--text-primary); font-size: 18px; cursor: pointer; padding: 4px; }
         .article-header .article-title { flex: 1; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .article-header .share-btn { background: none; border: none; color: var(--text-primary); font-size: 18px; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; }
+        .article-header .share-btn:active { opacity: 0.7; }
+        .article-header .delete-btn { background: none; border: none; color: var(--accent); font-size: 18px; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; }
+        .article-header .delete-btn:active { opacity: 0.7; }
         .article-header .pdf-btn { background: var(--accent); color: white; border: none; border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
         .article-content { padding: 16px; font-size: 15px; line-height: 1.7; }
         .article-content h1 { font-size: 20px; margin-bottom: 16px; line-height: 1.3; }
@@ -294,6 +300,11 @@
                     <button class="action-btn secondary" id="cancelBtn" onclick="cancelJob()"><i class="fas fa-times"></i> Annuler</button>
                     <button class="action-btn primary" id="openArticleBtn" onclick="openArticle()" style="display:none;"><i class="fas fa-eye"></i> Ouvrir l'article</button>
                 </div>
+                <div class="fallback-row" id="fallbackRow" style="display:none;">
+                    <p>Recherche échouée. Vous pouvez modifier les termes et réessayer :</p>
+                    <input type="text" id="fallbackInput" class="form-input">
+                    <button class="action-btn primary" onclick="retryScrape()" style="width:100%;margin-top:8px;"><i class="fas fa-redo"></i> Modifier et Réessayer</button>
+                </div>
             </div>
 
             <div class="section-title"><i class="fas fa-history"></i> Historique</div>
@@ -356,6 +367,8 @@
             <div class="article-header">
                 <button class="back-btn" onclick="closeArticle()"><i class="fas fa-arrow-left"></i></button>
                 <span class="article-title" id="viewerArticleTitle"></span>
+                <button class="share-btn" onclick="shareArticle()" title="Partager l'article"><i class="fas fa-share-alt"></i></button>
+                <button class="delete-btn" onclick="confirmDeleteArticle()" title="Supprimer l'article"><i class="fas fa-trash"></i></button>
                 <button class="pdf-btn" onclick="openPdf()"><i class="fas fa-file-pdf"></i> PDF</button>
             </div>
             <div class="article-content" id="articleContent"></div>
@@ -406,10 +419,12 @@
         apiKey: null,
         history: [],
         currentJobId: null,
+        currentJobUrl: null,
         currentArticleId: null,
         pollInterval: null,
         sharedText: null,
-        notificationSent: false
+        notificationSent: false,
+        lastActiveScreen: 'homeScreen'
     };
 
     // ===== STORAGE =====
@@ -480,6 +495,11 @@
     }
 
     window.switchScreen = function(screenId) {
+        const mainScreens = ['homeScreen', 'historyScreen', 'settingsScreen'];
+        if (mainScreens.includes(screenId)) {
+            state.lastActiveScreen = screenId;
+        }
+
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(n => n.classList.remove('active'));
         document.getElementById(screenId).classList.add('active');
@@ -740,6 +760,7 @@
         title.textContent = 'Vérification session BnF...';
         sub.textContent = ''; fill.style.width = '5%';
         actions.style.display = 'none'; openBtn.style.display = 'none';
+        document.getElementById('fallbackRow').style.display = 'none';
 
         try {
             // Check cookies
@@ -827,10 +848,40 @@
                     };
                     title.textContent = stepMap[job.status] || job.status;
                     if (job.article_title) sub.textContent = job.article_title;
-                    if (job.status === 'completed' || job.status === 'failed') {
+                    if (job.status === 'completed') {
                         clearInterval(state.pollInterval);
                         state.pollInterval = null;
+                        fill.style.width = '100%';
+                        card.className = 'status-card visible success';
+                        icon.className = 'fas fa-check-circle';
+                        state.currentArticleId = job.article_id;
+
+                        addToHistory({
+                            id: job.article_id,
+                            title: job.article_title || 'Article',
+                            url: job.url,
+                            source: job.source_site || '',
+                            date: new Date().toISOString(),
+                            status: 'completed'
+                        });
+
+                        resetScrapeBtn();
+                        toast('✅ Article téléchargé !', 'success');
+                        
                         window.Capacitor.Plugins.BackgroundPoll.stopPolling();
+                        openArticleById(job.article_id);
+                    } else if (job.status === 'failed') {
+                        clearInterval(state.pollInterval);
+                        state.pollInterval = null;
+                        card.className = 'status-card visible error';
+                        icon.className = 'fas fa-exclamation-triangle';
+                        window.Capacitor.Plugins.BackgroundPoll.stopPolling();
+                        
+                        if (job.search_terms) {
+                            document.getElementById('fallbackRow').style.display = 'block';
+                            document.getElementById('fallbackInput').value = job.search_terms;
+                            state.currentJobUrl = job.url || '';
+                        }
                     }
                 } catch(e) { console.error('Poll error:', e); }
             }, 3000);
@@ -889,6 +940,12 @@
                     title.textContent = 'Échec';
                     sub.textContent = job.error_message || 'Erreur inconnue';
                     resetScrapeBtn();
+                    
+                    if (job.search_terms) {
+                        document.getElementById('fallbackRow').style.display = 'block';
+                        document.getElementById('fallbackInput').value = job.search_terms;
+                        state.currentJobUrl = job.url || '';
+                    }
                 }
             } catch(e) {
                 console.error('Poll error:', e);
@@ -904,6 +961,50 @@
         state.pollInterval = null;
         resetScrapeBtn();
         document.getElementById('statusCard').classList.remove('visible');
+    };
+
+    window.retryScrape = async function() {
+        const newTerms = document.getElementById('fallbackInput').value.trim();
+        if (!newTerms) return;
+        
+        document.getElementById('fallbackRow').style.display = 'none';
+        
+        const payload = {
+            url: state.currentJobUrl || '',
+            search_terms: newTerms
+        };
+        if (state.bnfCookies?.length) {
+            payload.cookies = state.bnfCookies;
+        }
+
+        const card = document.getElementById('statusCard');
+        const icon = document.getElementById('statusIcon');
+        const title = document.getElementById('statusTitle');
+        const sub = document.getElementById('statusSub');
+        const fill = document.getElementById('progressFill');
+        
+        card.className = 'status-card visible processing';
+        icon.className = 'fas fa-spinner fa-spin';
+        title.textContent = 'Nouvelle tentative...';
+        sub.textContent = ''; fill.style.width = '15%';
+
+        try {
+            const result = await apiCall('/scrape', {
+                method: 'POST',
+                body: payload
+            });
+
+            if (result.job_id) {
+                pollJob(result.job_id);
+            } else {
+                throw new Error(result.message || 'Erreur lors de la nouvelle tentative');
+            }
+        } catch(e) {
+            card.className = 'status-card visible error';
+            icon.className = 'fas fa-exclamation-triangle';
+            title.textContent = 'Erreur';
+            sub.textContent = e.message;
+        }
     };
 
     function resetScrapeBtn() {
@@ -931,7 +1032,83 @@
     }
 
     window.closeArticle = function() {
-        switchScreen('homeScreen');
+        switchScreen(state.lastActiveScreen || 'homeScreen');
+    };
+
+    window.shareArticle = async function() {
+        const articleId = state.currentArticleId;
+        if (!articleId) {
+            toast("Aucun article à partager", "error");
+            return;
+        }
+
+        const article = state.history.find(h => h.id === articleId);
+        const title = article ? article.title : "Article";
+        const shareUrl = `${state.apiUrl}/article/${articleId}`;
+
+        if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.Share) {
+            try {
+                const { Share } = window.Capacitor.Plugins;
+                await Share.share({
+                    title: title,
+                    text: `Voici un article intéressant : ${title}`,
+                    url: shareUrl,
+                    dialogTitle: 'Partager l\'article'
+                });
+            } catch (e) {
+                console.error("Erreur de partage Capacitor:", e);
+            }
+        } else if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: title,
+                    text: `Voici un article intéressant : ${title}`,
+                    url: shareUrl
+                });
+            } catch (e) {
+                console.error("Erreur de partage Web:", e);
+            }
+        } else {
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                toast("Lien copié dans le presse-papiers !", "success");
+            } catch (e) {
+                console.error("Erreur presse-papiers:", e);
+                alert(`Lien de partage : ${shareUrl}`);
+            }
+        }
+    };
+
+    window.confirmDeleteArticle = async function() {
+        const articleId = state.currentArticleId;
+        if (!articleId) return;
+
+        const confirmation = confirm("Voulez-vous vraiment supprimer définitivement cet article et son fichier PDF ?");
+        if (!confirmation) return;
+
+        toast("Suppression en cours...", "");
+
+        try {
+            await apiCall('/article/' + articleId, {
+                method: 'DELETE'
+            });
+
+            toast("Article supprimé avec succès", "success");
+
+            // Remove from local history
+            const index = state.history.findIndex(h => h.id === articleId);
+            if (index >= 0) {
+                state.history.splice(index, 1);
+                save();
+            }
+
+            // Close viewer and refresh history
+            closeArticle();
+            renderHistory();
+            renderFullHistory();
+        } catch(e) {
+            toast("Erreur de suppression : " + e.message, "error");
+        }
     };
 
     window.openPdf = function() {
@@ -1113,26 +1290,17 @@
     window.handleSharedContent = function(text) {
         console.log('[SHARE] handleSharedContent called with:', text);
         state.sharedText = text;
-        const isUrl = text.match(/^https?:\/\//);
-        const banner = document.getElementById('sharedBanner');
-        if (!banner) {
-            console.log('[SHARE] sharedBanner element not found!');
-            return;
-        }
-        document.getElementById('sharedLabel').textContent = isUrl ? 'Lien partagé' : 'Texte partagé';
-        document.getElementById('sharedContent').textContent = text.length ? text.substring(0, 60) + (text.length > 60 ? '...' : '') : '';
-        banner.classList.add('visible');
-        console.log('[SHARE] banner should be visible now');
 
-        // Auto-fill input and start scraping
+        // Switch to home screen immediately
+        switchScreen('homeScreen');
+
+        // Fill the input
         const urlInput = document.getElementById('urlInput');
         if (urlInput) {
             urlInput.value = text;
-            console.log('[SHARE] input filled, starting scrape');
-            // Switch to home screen if not already there
-            switchScreen('home');
-            // Start scraping automatically
-            setTimeout(() => startScraping(), 300);
+            console.log('[SHARE] input filled, starting scrape automatically');
+            // Start scraping immediately
+            startScraping();
         }
     };
 
@@ -1177,6 +1345,10 @@
     // Handle shared content from Android intents
     if (typeof window.Capacitor !== 'undefined') {
         console.log('[SHARE] Capacitor detected, registering listeners');
+        setTimeout(() => {
+            console.log('[DEBUG] Available Capacitor Plugins:', Object.keys(window.Capacitor.Plugins || {}).join(', '));
+            console.log('[DEBUG] IntentForwarder plugin present after delay:', typeof window.Capacitor.Plugins?.IntentForwarder !== 'undefined');
+        }, 1000);
 
         // Use IntentForwarder plugin for reliable intent forwarding
         if (window.Capacitor.Plugins?.IntentForwarder) {
@@ -1194,18 +1366,17 @@
                     handleSharedContent(result.data);
                 }
             }).catch(() => {});
-        } else {
-            // Fallback: listen on document
-            console.log('[SHARE] IntentForwarder not available, using document listeners');
-            document.addEventListener('sharedText', (e) => {
-                console.log('[SHARE] sharedText on document:', e.detail);
-                if (e.detail) handleSharedContent(e.detail);
-            });
-            document.addEventListener('sharedUrl', (e) => {
-                console.log('[SHARE] sharedUrl on document:', e.detail);
-                if (e.detail) handleSharedContent(e.detail);
-            });
         }
+
+        // Always listen on window for events from MainActivity.notifyJs (triggerWindowJSEvent)
+        window.addEventListener('sharedText', (e) => {
+            console.log('[SHARE] sharedText on window, url:', e.url);
+            if (e.url) handleSharedContent(e.url);
+        });
+        window.addEventListener('sharedUrl', (e) => {
+            console.log('[SHARE] sharedUrl on window, url:', e.url);
+            if (e.url) handleSharedContent(e.url);
+        });
 
         document.addEventListener('openArticle', (e) => {
             console.log('[SHARE] openArticle on document:', e.detail);
@@ -1218,16 +1389,29 @@
         // When app resumes from background, check if any job completed while away
         // and show notification retroactively
         if (window.Capacitor.Plugins?.App) {
-            window.Capacitor.Plugins.App.addListener('resume', () => {
-                console.log('[NOTIF] app resumed, checking pending jobs');
-                if (state.currentJobId && !state.notificationSent) {
-                    // Check job status and show notification if completed
-                    apiCall('/job/' + state.currentJobId).then(job => {
-                        if (job.status === 'completed' && job.article_title) {
-                            state.notificationSent = true;
-                            showNativeNotification('📰 Article téléchargé', job.article_title, job.article_id);
-                        }
-                    }).catch(() => {});
+            window.Capacitor.Plugins.App.addListener('appStateChange', (stateInfo) => {
+                console.log('[APP] State changed:', stateInfo);
+                if (stateInfo.isActive) {
+                    console.log('[SHARE] App became active (resumed), checking for new intents');
+                    if (window.Capacitor.Plugins?.IntentForwarder) {
+                        window.Capacitor.Plugins.IntentForwarder.getLastIntent().then((result) => {
+                            console.log('[SHARE] getLastIntent on resume result:', result);
+                            if (result?.data) {
+                                handleSharedContent(result.data);
+                            }
+                        }).catch(() => {});
+                    }
+
+                    console.log('[NOTIF] app resumed, checking pending jobs');
+                    if (state.currentJobId && !state.notificationSent) {
+                        // Check job status and show notification if completed
+                        apiCall('/job/' + state.currentJobId).then(job => {
+                            if (job.status === 'completed' && job.article_title) {
+                                state.notificationSent = true;
+                                showNativeNotification('📰 Article téléchargé', job.article_title, job.article_id);
+                            }
+                        }).catch(() => {});
+                    }
                 }
             });
         }
