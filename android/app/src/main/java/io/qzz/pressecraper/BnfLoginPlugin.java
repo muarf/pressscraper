@@ -706,4 +706,27 @@ public class BnfLoginPlugin extends Plugin {
             }
         });
     }
+
+    /**
+     * Retourne le User-Agent réel de la WebView Android de l'appareil.
+     * Permet au JS d'utiliser un UA dynamique et authentique plutôt qu'une chaîne statique,
+     * ce qui réduit le risque d'être détecté comme bot par Europresse.
+     */
+    @PluginMethod()
+    public void getWebViewUserAgent(PluginCall call) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try {
+                String ua = android.webkit.WebSettings.getDefaultUserAgent(getContext());
+                JSObject result = new JSObject();
+                result.put("userAgent", ua);
+                call.resolve(result);
+            } catch (Exception e) {
+                Log.e(TAG, "getWebViewUserAgent error", e);
+                // Fallback graceful — le JS utilisera son UA statique de secours
+                JSObject result = new JSObject();
+                result.put("userAgent", "");
+                call.resolve(result);
+            }
+        });
+    }
 }
