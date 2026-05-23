@@ -24,8 +24,13 @@
         lastActiveScreen: 'homeScreen'
     };
 
-    // ===== PERSISTANCE LOCALSTORAGE =====
-    function load() {
+    // ===== PERSISTANCE =====
+    // Les identifiants (username/password) sont stockés exclusivement via le
+    // plugin natif BnfLogin (EncryptedSharedPreferences + Keystore Android).
+    // Les données de session (cookies, expiry) et l'historique restent dans
+    // localStorage car ils ne constituent pas des secrets long-terme.
+
+    function loadFromLocalStorage() {
         try {
             const s = localStorage.getItem(STORAGE_KEY);
             if (s) Object.assign(state, JSON.parse(s));
@@ -33,9 +38,8 @@
     }
 
     function save() {
+        // Persister les données non-sensibles dans localStorage
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            bnfUsername: state.bnfUsername,
-            bnfPassword: state.bnfPassword,
             bnfCookies: state.bnfCookies,
             bnfCookiesHeader: state.bnfCookiesHeader,
             bnfCookiesExpiry: state.bnfCookiesExpiry,
@@ -44,16 +48,78 @@
                 source: h.source || h.site_source || '', date: h.date
             }))
         }));
+
+        // Persister les identifiants de manière sécurisée via le plugin natif
+        if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.BnfLogin) {
+            window.Capacitor.Plugins.BnfLogin.saveCredentials({
+                username: state.bnfUsername || '',
+                password: state.bnfPassword || ''
+            }).catch(e => console.warn('[CREDS] saveCredentials failed:', e));
+        }
     }
 
-    // ===== INIT =====
-    load();
+    // ===== INIT ASYNCHRONE =====
+    async function init() {
+        // 1. Charger les données non-sensibles depuis localStorage
+        loadFromLocalStorage();
 
-    if (!state.bnfUsername || !state.bnfPassword || !state.bnfCookies) {
-        showOnboarding();
-    } else {
-        showMainApp();
+        // 2. Récupérer les identifiants depuis le stockage sécurisé natif
+        if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.BnfLogin) {
+            try {
+                const creds = await window.Capacitor.Plugins.BnfLogin.getCredentials();
+                if (creds.username) state.bnfUsername = creds.username;
+                if (creds.password) state.bnfPassword = creds.password;
+
+                // Migration : si des identifiants existent encore dans localStorage en clair,
+                // les sauvegarder dans le stockage sécurisé puis les effacer de localStorage
+                const oldRaw = localStorage.getItem(STORAGE_KEY);
+                if (oldRaw) {
+                    try {
+                        const old = JSON.parse(oldRaw);
+                        if ((old.bnfUsername || old.bnfPassword) && !creds.username) {
+                            state.bnfUsername = old.bnfUsername || '';
+                            state.bnfPassword = old.bnfPassword || '';
+                            await window.Capacitor.Plugins.BnfLogin.saveCredentials({
+                                username: state.bnfUsername,
+                                password: state.bnfPassword
+                            });
+                            console.log('[CREDS] Migration localStorage → EncryptedSharedPreferences OK');
+                        }
+                    } catch(e) {}
+                }
+            } catch(e) {
+                console.warn('[CREDS] getCredentials failed, fallback localStorage:', e);
+                // Fallback : tenter de lire depuis l’ancienne clé localStorage
+                try {
+                    const s = localStorage.getItem(STORAGE_KEY);
+                    if (s) {
+                        const parsed = JSON.parse(s);
+                        if (parsed.bnfUsername) state.bnfUsername = parsed.bnfUsername;
+                        if (parsed.bnfPassword) state.bnfPassword = parsed.bnfPassword;
+                    }
+                } catch(e2) {}
+            }
+        } else {
+            // Hors contexte natif Android : fallback localStorage (ne devrait pas arriver en prod)
+            try {
+                const s = localStorage.getItem(STORAGE_KEY);
+                if (s) {
+                    const parsed = JSON.parse(s);
+                    if (parsed.bnfUsername) state.bnfUsername = parsed.bnfUsername;
+                    if (parsed.bnfPassword) state.bnfPassword = parsed.bnfPassword;
+                }
+            } catch(e) {}
+        }
+
+        // 3. Décider quel écran afficher
+        if (!state.bnfUsername || !state.bnfPassword || !state.bnfCookies) {
+            showOnboarding();
+        } else {
+            showMainApp();
+        }
     }
+
+    init();
 
     // ===== GESTION DES ÉCRANS =====
     function showOnboarding() {
@@ -501,9 +567,20 @@
         state.bnfCookies = null;
         state.bnfCookiesHeader = null;
         state.bnfCookiesExpiry = null;
+        state.bnfUsername = '';
+        state.bnfPassword = '';
         save();
+
+        // Effacer les identifiants du stockage sécurisé natif
+        if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.BnfLogin) {
+            window.Capacitor.Plugins.BnfLogin.clearCredentials().catch(e =>
+                console.warn('[CREDS] clearCredentials failed:', e)
+            );
+        }
+
         updateCookieStatusUI();
         toast('Session BnF supprimée', '');
+        showOnboarding();
     };
 
     window.clearCache = async function() {

@@ -1,6 +1,7 @@
 package io.qzz.pressecraper;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.CancellationSignal;
 import android.os.Handler;
@@ -14,6 +15,9 @@ import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
+import androidx.security.crypto.EncryptedSharedPreferences;
+import androidx.security.crypto.MasterKeys;
 
 import androidx.core.content.FileProvider;
 
@@ -728,5 +732,103 @@ public class BnfLoginPlugin extends Plugin {
                 call.resolve(result);
             }
         });
+    }
+
+    // ===== STOCKAGE SÉCURISÉ DES IDENTIFIANTS =====
+
+    private static final String CREDS_PREFS_FILE = "bnf_secure_prefs";
+    private static final String KEY_USERNAME = "bnf_username";
+    private static final String KEY_PASSWORD = "bnf_password";
+
+    /**
+     * Retourne une instance de SharedPreferences chiffrées via Android Keystore.
+     * Le fichier de préférences est chiffré avec AES-256-GCM pour les valeurs
+     * et AES-256-SIV pour les clés.
+     */
+    private SharedPreferences getEncryptedPrefs() throws Exception {
+        String masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
+        return EncryptedSharedPreferences.create(
+            CREDS_PREFS_FILE,
+            masterKeyAlias,
+            getContext(),
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        );
+    }
+
+    /**
+     * Enregistre les identifiants BnF de manière chiffrée dans le Keystore Android.
+     * Appelé depuis JS : BnfLogin.saveCredentials({ username, password })
+     */
+    @PluginMethod()
+    public void saveCredentials(PluginCall call) {
+        String username = call.getString("username", "");
+        String password = call.getString("password", "");
+        try {
+            SharedPreferences prefs = getEncryptedPrefs();
+            prefs.edit()
+                .putString(KEY_USERNAME, username)
+                .putString(KEY_PASSWORD, password)
+                .apply();
+            Log.d(TAG, "saveCredentials: identifiants enregistrés de manière sécurisée");
+            JSObject result = new JSObject();
+            result.put("success", true);
+            call.resolve(result);
+        } catch (Exception e) {
+            Log.e(TAG, "saveCredentials error", e);
+            JSObject result = new JSObject();
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            call.resolve(result);
+        }
+    }
+
+    /**
+     * Récupère les identifiants BnF chiffrés depuis le Keystore Android.
+     * Appelé depuis JS : BnfLogin.getCredentials()
+     */
+    @PluginMethod()
+    public void getCredentials(PluginCall call) {
+        try {
+            SharedPreferences prefs = getEncryptedPrefs();
+            String username = prefs.getString(KEY_USERNAME, "");
+            String password = prefs.getString(KEY_PASSWORD, "");
+            Log.d(TAG, "getCredentials: lecture OK, username=" + (username.isEmpty() ? "(vide)" : "(présent)"));
+            JSObject result = new JSObject();
+            result.put("username", username);
+            result.put("password", password);
+            call.resolve(result);
+        } catch (Exception e) {
+            Log.e(TAG, "getCredentials error", e);
+            JSObject result = new JSObject();
+            result.put("username", "");
+            result.put("password", "");
+            call.resolve(result);
+        }
+    }
+
+    /**
+     * Supprime les identifiants BnF chiffrés du Keystore Android.
+     * Appelé depuis JS : BnfLogin.clearCredentials()
+     */
+    @PluginMethod()
+    public void clearCredentials(PluginCall call) {
+        try {
+            SharedPreferences prefs = getEncryptedPrefs();
+            prefs.edit()
+                .remove(KEY_USERNAME)
+                .remove(KEY_PASSWORD)
+                .apply();
+            Log.d(TAG, "clearCredentials: identifiants supprimés");
+            JSObject result = new JSObject();
+            result.put("success", true);
+            call.resolve(result);
+        } catch (Exception e) {
+            Log.e(TAG, "clearCredentials error", e);
+            JSObject result = new JSObject();
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            call.resolve(result);
+        }
     }
 }
