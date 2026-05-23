@@ -209,8 +209,7 @@
         .nav-btn i { font-size: 18px; }
         .nav-btn.active { color: var(--accent); }
 
-        /* Client-side mode badge */
-        .mode-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(0,210,211,0.15); color: var(--success); font-weight: 600; letter-spacing: 0.3px; }
+
     </style>
 </head>
 <body>
@@ -248,7 +247,7 @@
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1><i class="fas fa-newspaper"></i> Presse Scraper <span class="mode-badge">LOCAL</span></h1>
+            <h1><i class="fas fa-newspaper"></i> Presse Scraper</h1>
             <span class="session-dot none" id="sessionDot" title="Session BnF"></span>
         </header>
 
@@ -264,9 +263,9 @@
             </div>
 
             <div class="input-card">
-                <label>URL de l'article de presse</label>
+                <label>Lien d'article ou mots-clés de recherche</label>
                 <div class="input-row">
-                    <input type="text" id="urlInput" placeholder="Collez un lien d'article..." autocomplete="off">
+                    <input type="text" id="urlInput" placeholder="Collez un lien ou entrez des mots-clés..." autocomplete="off">
                     <button class="scrape-btn" id="scrapeBtn" onclick="startScraping()">
                         <i class="fas fa-magic"></i> Scraper
                     </button>
@@ -321,17 +320,7 @@
                 </button>
             </div>
 
-            <div class="settings-group">
-                <h3>Mode</h3>
-                <div class="setting-item">
-                    <div class="label">Architecture</div>
-                    <div class="value connected">100% Client-Side</div>
-                </div>
-                <div class="setting-item">
-                    <div class="label">Stockage</div>
-                    <div class="value">IndexedDB + Fichiers locaux</div>
-                </div>
-            </div>
+
         </div>
 
         <!-- ARTICLE VIEWER SCREEN -->
@@ -632,29 +621,15 @@
             'pas','plus','son','ses','mais','nous','vous','ils','elle','ces','ont'
         ]);
 
-        const prefixes = ['d','l','qu','m','t','s','n','c','j'];
         const words = cleanTitle.toLowerCase().split(/\s+/);
         const filtered = [];
         const seen = new Set();
 
         for (const raw of words) {
-            const cw = raw.replace(/[^\w]/gi, '');
+            const cw = raw.replace(/[^\p{L}\d]/gu, '');
             if (!cw || cw.length <= 2 || stopwords.has(cw)) continue;
 
-            // Handle contractions without apostrophe (lhumidite -> humidite)
-            let handled = false;
-            for (const p of prefixes) {
-                if (cw.startsWith(p) && cw.length > p.length + 2) {
-                    const rest = cw.substring(p.length);
-                    if (rest.length > 2 && !stopwords.has(rest) && !seen.has(rest)) {
-                        seen.add(rest);
-                        filtered.push(rest);
-                        handled = true;
-                        break;
-                    }
-                }
-            }
-            if (!handled && !seen.has(cw)) {
+            if (!seen.has(cw)) {
                 seen.add(cw);
                 filtered.push(cw);
             }
@@ -703,38 +678,85 @@
         fill.style.width = progress + '%';
     }
 
-    async function scrapeArticleClientSide(articleUrl) {
+    function removeHighlightTags(html) {
+        if (!html) return html;
+        try {
+            const parser = new DOMParser();
+            const tempDoc = parser.parseFromString(html, 'text/html');
+            
+            // 1. Unwrap all <mark> tags
+            let marks = tempDoc.querySelectorAll('mark');
+            while (marks.length > 0) {
+                marks.forEach(mark => {
+                    const parent = mark.parentNode;
+                    if (parent) {
+                        while (mark.firstChild) {
+                            parent.insertBefore(mark.firstChild, mark);
+                        }
+                        parent.removeChild(mark);
+                    }
+                });
+                marks = tempDoc.querySelectorAll('mark'); // handle nested ones
+            }
+
+            // 2. Remove hlterms classes
+            tempDoc.querySelectorAll('.hlterms').forEach(el => {
+                el.classList.remove('hlterms');
+            });
+
+            return tempDoc.body.innerHTML;
+        } catch(e) {
+            console.error('[CLEAN] Error removing highlights:', e);
+            return html;
+        }
+    }
+
+    async function scrapeArticleClientSide(titleOrUrl, fallbackTitle) {
         const BnfLogin = window.Capacitor.Plugins.BnfLogin;
         const cookieHeader = state.bnfCookiesHeader || '';
         const ua = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 
-        updateStatusUI('Étape 1/5', 'Récupération du titre...', 10);
-
-        // Step A: Get article metadata from original page
+        const isUrl = titleOrUrl.startsWith('http');
         let articleTitle = '';
         let publishedDate = '';
-        try {
-            const pageRes = await BnfLogin.httpRequest({ url: articleUrl, method: 'GET', headers: { 'User-Agent': ua } });
-            if (pageRes.data) {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(pageRes.data, 'text/html');
-                articleTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')
-                    || doc.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
-                    || doc.title || '';
-                publishedDate = doc.querySelector('meta[property="article:published_time"]')?.getAttribute('content')
-                    || doc.querySelector('meta[name="publication_date"]')?.getAttribute('content') || '';
-            }
-        } catch(e) {
-            console.warn('[SCRAPE] Failed to fetch original page:', e);
-        }
+        let articleUrl = isUrl ? titleOrUrl : '';
 
-        // Fallback: slug
-        if (!articleTitle) {
-            try {
-                const urlObj = new URL(articleUrl);
-                const slug = urlObj.pathname.split('/').pop().replace(/\.html?$/, '');
-                articleTitle = slug.replace(/[-_]/g, ' ').replace(/\s+\d{2,}\s*$/g, '').trim();
-            } catch(e) {}
+        if (isUrl) {
+            updateStatusUI('Étape 1/5', 'Récupération du titre...', 10);
+            articleTitle = fallbackTitle || '';
+
+            if (!articleTitle) {
+                try {
+                    const pageRes = await BnfLogin.httpRequest({ url: articleUrl, method: 'GET', headers: { 'User-Agent': ua } });
+                    if (pageRes.status === 200 && pageRes.data) {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(pageRes.data, 'text/html');
+                        articleTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')
+                            || doc.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
+                            || doc.title || '';
+                        publishedDate = doc.querySelector('meta[property="article:published_time"]')?.getAttribute('content')
+                            || doc.querySelector('meta[name="publication_date"]')?.getAttribute('content') || '';
+                    }
+                } catch(e) {
+                    console.warn('[SCRAPE] Failed to fetch original page:', e);
+                }
+            }
+
+            // Fallback: slug
+            if (!articleTitle || articleTitle.toLowerCase().trim() === 'liberation.fr' || articleTitle.toLowerCase().trim() === 'le monde' || articleTitle.toLowerCase().trim() === 'le figaro') {
+                try {
+                    const urlObj = new URL(articleUrl);
+                    const pathSegments = urlObj.pathname.split('/').filter(Boolean);
+                    let slug = pathSegments.pop() || '';
+                    slug = slug.replace(/\.html?$/, '');
+                    if (slug.includes('_')) {
+                        slug = slug.split('_')[0];
+                    }
+                    articleTitle = slug.replace(/[-]/g, ' ').replace(/\s+\d{2,}\s*$/g, '').trim();
+                } catch(e) {}
+            }
+        } else {
+            articleTitle = titleOrUrl;
         }
 
         const query = processTitleToQuery(articleTitle);
@@ -879,7 +901,11 @@
         if (!contentContainer) throw new Error("Contenu de l'article introuvable sur Europresse (.docOcurrContainer absent).");
 
         const visTitle = docDoc.querySelector('.titreArticleVisu')?.innerHTML || bestMatch.title;
-        const finalHtml = `<h1>${visTitle}</h1>${contentContainer.innerHTML}`;
+        
+        // Remove search highlights
+        const cleanTitle = removeHighlightTags(visTitle);
+        const cleanContent = removeHighlightTags(contentContainer.innerHTML);
+        const finalHtml = `<h1>${cleanTitle}</h1>${cleanContent}`;
 
         return {
             html: finalHtml,
@@ -892,8 +918,25 @@
     // ===== SCRAPING =====
     window.startScraping = async function() {
         const input = document.getElementById('urlInput').value.trim();
-        if (!input) { toast('Entrez un lien d\'article', 'error'); return; }
-        if (!input.startsWith('http')) { toast('Seuls les liens HTTP/HTTPS sont acceptés', 'error'); return; }
+        if (!input) { toast('Entrez un lien d\'article ou des mots-clés', 'error'); return; }
+
+        let targetUrlOrQuery = '';
+        let fallbackTitle = '';
+        let isUrl = false;
+
+        const urlMatch = input.match(/(https?:\/\/[^\s]+)/i);
+        if (urlMatch) {
+            isUrl = true;
+            targetUrlOrQuery = urlMatch[0];
+            let restText = input.replace(targetUrlOrQuery, '').trim();
+            // Clean outer quotes, braces, colons, hyphens, and whitespace
+            restText = restText.replace(/^["'«“\s:—–-]+|["'»”\s:—–-]+$/g, '').trim();
+            if (restText.length > 5) {
+                fallbackTitle = restText;
+            }
+        } else {
+            targetUrlOrQuery = input;
+        }
 
         const btn = document.getElementById('scrapeBtn');
         const card = document.getElementById('statusCard');
@@ -937,7 +980,7 @@
             updateCookieStatusUI();
 
             // 1. Scrape article client-side
-            const scraped = await scrapeArticleClientSide(input);
+            const scraped = await scrapeArticleClientSide(targetUrlOrQuery, fallbackTitle);
 
             // 2. Generate PDF locally
             updateStatusUI('PDF', 'Génération du PDF local...', 90);
