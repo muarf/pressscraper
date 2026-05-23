@@ -1,11 +1,21 @@
 package io.qzz.pressecraper;
 
+import android.content.Intent;
+import android.net.Uri;
+import android.os.CancellationSignal;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
+import android.print.PageRange;
+import android.print.PrintAttributes;
+import android.print.PrintDocumentAdapter;
+import android.print.PrintDocumentInfo;
 import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
+import androidx.core.content.FileProvider;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -17,16 +27,16 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @CapacitorPlugin(name = "BnfLogin")
 public class BnfLoginPlugin extends Plugin {
@@ -39,6 +49,18 @@ public class BnfLoginPlugin extends Plugin {
     private PluginCall pendingCall;
     private Handler timeoutHandler;
     private Runnable timeoutRunnable;
+
+    @Override
+    public void load() {
+        super.load();
+        try {
+            java.net.CookieManager cookieManager = new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL);
+            java.net.CookieHandler.setDefault(cookieManager);
+            Log.d(TAG, "CookieHandler initialized successfully");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize CookieHandler", e);
+        }
+    }
 
     @PluginMethod()
     public void login(PluginCall call) {
@@ -258,6 +280,8 @@ public class BnfLoginPlugin extends Plugin {
             return;
         }
 
+        Log.d(TAG, "HTTP Request: " + method.toUpperCase() + " " + urlStr);
+
         // Run on background thread
         new Thread(() -> {
             try {
@@ -268,12 +292,44 @@ public class BnfLoginPlugin extends Plugin {
                 conn.setReadTimeout(30000);
 
                 // Set headers
+                // Set headers
+                String jsCookie = null;
                 if (headersObj != null) {
                     java.util.Iterator<String> keys = headersObj.keys();
                     while (keys.hasNext()) {
                         String key = keys.next();
-                        conn.setRequestProperty(key, headersObj.getString(key));
+                        String val = headersObj.getString(key);
+                        if (key.equalsIgnoreCase("Cookie")) {
+                            jsCookie = val;
+                        } else {
+                            conn.setRequestProperty(key, val);
+                        }
                     }
+                }
+
+                // Merge JS Cookie header with system CookieHandler store
+                StringBuilder mergedCookies = new StringBuilder();
+                if (jsCookie != null && !jsCookie.isEmpty()) {
+                    mergedCookies.append(jsCookie);
+                }
+                try {
+                    java.net.CookieManager cookieManager = (java.net.CookieManager) java.net.CookieHandler.getDefault();
+                    if (cookieManager != null) {
+                        for (java.net.HttpCookie cookie : cookieManager.getCookieStore().getCookies()) {
+                            if (mergedCookies.length() > 0) {
+                                mergedCookies.append("; ");
+                            }
+                            mergedCookies.append(cookie.getName()).append("=").append(cookie.getValue());
+                        }
+                    }
+                } catch (Exception ce) {
+                    Log.w(TAG, "   Error retrieving system cookies: " + ce.getMessage());
+                }
+
+                if (mergedCookies.length() > 0) {
+                    String finalCookies = mergedCookies.toString();
+                    conn.setRequestProperty("Cookie", finalCookies);
+                    Log.d(TAG, "   Merged Cookie Header: " + (finalCookies.length() > 60 ? finalCookies.substring(0, 60) + "..." : finalCookies));
                 }
 
                 // Set body for POST/PUT
@@ -284,9 +340,80 @@ public class BnfLoginPlugin extends Plugin {
                     os.write(bodyStr.getBytes("UTF-8"));
                     os.flush();
                     os.close();
+                    Log.d(TAG, "   Request Body size: " + bodyStr.length() + " chars");
                 }
 
                 int status = conn.getResponseCode();
+                Log.d(TAG, "   Response Status Code: " + status);
+
+                int redirectCount = 0;
+                String finalCookies = mergedCookies.toString();
+                while ((status == 301 || status == 302 || status == 303 || status == 307 || status == 308) && redirectCount < 5) {
+                    redirectCount++;
+                    String location = conn.getHeaderField("Location");
+                    if (location == null || location.isEmpty()) {
+                        break;
+                    }
+
+                    // Resolve redirect URL
+                    URL base = conn.getURL();
+                    URL next = new URL(base, location);
+
+                    Log.d(TAG, "   Redirecting (" + redirectCount + ") to: " + next.toExternalForm());
+
+                    conn = (HttpURLConnection) next.openConnection();
+                    conn.setRequestMethod("GET"); // POST redirects are followed as GET
+                    conn.setConnectTimeout(30000);
+                    conn.setReadTimeout(30000);
+
+                    // Update finalCookies with newly stored cookies in CookieManager
+                    StringBuilder newCookies = new StringBuilder(finalCookies);
+                    try {
+                        java.net.CookieManager cookieManager = (java.net.CookieManager) java.net.CookieHandler.getDefault();
+                        if (cookieManager != null) {
+                            for (java.net.HttpCookie cookie : cookieManager.getCookieStore().getCookies()) {
+                                String cookieString = cookie.getName() + "=" + cookie.getValue();
+                                if (newCookies.indexOf(cookieString) == -1) {
+                                    if (newCookies.length() > 0) {
+                                        newCookies.append("; ");
+                                    }
+                                    newCookies.append(cookieString);
+                                }
+                            }
+                        }
+                    } catch (Exception ce) {
+                        Log.w(TAG, "   Error merging redirect cookies: " + ce.getMessage());
+                    }
+                    finalCookies = newCookies.toString();
+
+                    if (!finalCookies.isEmpty()) {
+                        conn.setRequestProperty("Cookie", finalCookies);
+                    }
+
+                    if (headersObj != null) {
+                        java.util.Iterator<String> keys = headersObj.keys();
+                        while (keys.hasNext()) {
+                            String key = keys.next();
+                            if (!key.equalsIgnoreCase("Cookie") && !key.equalsIgnoreCase("Content-Type")) {
+                                conn.setRequestProperty(key, headersObj.getString(key));
+                            }
+                        }
+                    }
+
+                    status = conn.getResponseCode();
+                    Log.d(TAG, "   Redirect Response Status Code: " + status);
+                }
+
+                // Log final response headers (especially Set-Cookie)
+                java.util.Map<String, java.util.List<String>> headerFields = conn.getHeaderFields();
+                for (java.util.Map.Entry<String, java.util.List<String>> entry : headerFields.entrySet()) {
+                    String key = entry.getKey();
+                    if (key != null && key.equalsIgnoreCase("Set-Cookie")) {
+                        for (String cookieVal : entry.getValue()) {
+                            Log.d(TAG, "   Response Set-Cookie: " + cookieVal);
+                        }
+                    }
+                }
 
                 // Read response
                 BufferedReader br;
@@ -302,13 +429,15 @@ public class BnfLoginPlugin extends Plugin {
                 }
                 br.close();
 
+                Log.d(TAG, "   Response Body size: " + sb.length() + " chars");
+
                 JSObject result = new JSObject();
                 result.put("status", status);
                 result.put("data", sb.toString());
                 call.resolve(result);
 
             } catch (Exception e) {
-                Log.e(TAG, "httpRequest error", e);
+                Log.e(TAG, "   HTTP request failed", e);
                 JSObject result = new JSObject();
                 result.put("error", e.getMessage());
                 call.resolve(result);
@@ -440,5 +569,164 @@ public class BnfLoginPlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("success", true);
         call.resolve(result);
+    }
+
+    // ===== CLIENT-SIDE PDF GENERATION =====
+
+    /**
+     * Generates a PDF silently from an HTML string using Android's native print framework.
+     * The PDF is saved to the app's cache directory (no extra permissions needed).
+     */
+    @PluginMethod()
+    public void printHtmlToPdf(PluginCall call) {
+        String html = call.getString("html", "");
+        String filename = call.getString("filename", "article_" + System.currentTimeMillis() + ".pdf");
+
+        if (html.isEmpty()) {
+            JSObject result = new JSObject();
+            result.put("success", false);
+            result.put("error", "Le contenu HTML est vide");
+            call.resolve(result);
+            return;
+        }
+
+        this.pendingCall = call;
+
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try {
+                WebView printWebView = new WebView(getContext());
+                printWebView.getSettings().setJavaScriptEnabled(true);
+
+                // Premium CSS template for the PDF
+                String styledHtml = "<html><head><meta charset='UTF-8'>" +
+                    "<style>" +
+                    "body { font-family: 'Georgia', serif; padding: 40px; color: #111; line-height: 1.8; font-size: 16px; }" +
+                    "h1 { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 26px; font-weight: 700; color: #000; margin-bottom: 25px; line-height: 1.25; }" +
+                    "p { margin-bottom: 16px; text-align: justify; }" +
+                    "img { max-width: 100%; height: auto; display: block; margin: 20px auto; }" +
+                    ".source { font-style: italic; color: #666; margin-bottom: 20px; font-size: 14px; }" +
+                    "</style></head><body>" + html + "</body></html>";
+
+                printWebView.loadDataWithBaseURL("file:///android_asset/", styledHtml, "text/html", "UTF-8", null);
+                printWebView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public void onPageFinished(WebView view, String url) {
+                        Log.d(TAG, "printHtmlToPdf: WebView page loaded, starting PDF generation");
+
+                        PrintAttributes attributes = new PrintAttributes.Builder()
+                            .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                            .setResolution(new PrintAttributes.Resolution("pdf", "pdf", 600, 600))
+                            .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                            .build();
+
+                        PrintDocumentAdapter printAdapter = printWebView.createPrintDocumentAdapter(filename);
+
+                        File pdfFile = new File(getContext().getCacheDir(), filename);
+
+                        android.print.PDFPrintHelper.print(printAdapter, attributes, pdfFile, new android.print.PDFPrintHelper.PDFPrintCallback() {
+                            @Override
+                            public void onSuccess(String path) {
+                                Log.d(TAG, "printHtmlToPdf: PDF saved to " + path);
+                                JSObject ret = new JSObject();
+                                ret.put("success", true);
+                                ret.put("path", path);
+                                call.resolve(ret);
+                                printWebView.destroy();
+                            }
+
+                            @Override
+                            public void onError(String error) {
+                                Log.e(TAG, "printHtmlToPdf failed: " + error);
+                                JSObject ret = new JSObject();
+                                ret.put("success", false);
+                                ret.put("error", error);
+                                call.resolve(ret);
+                                printWebView.destroy();
+                            }
+                        });
+                    }
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "printHtmlToPdf: exception", e);
+                JSObject ret = new JSObject();
+                ret.put("success", false);
+                ret.put("error", "Exception: " + e.getMessage());
+                call.resolve(ret);
+            }
+        });
+    }
+
+    /**
+     * Opens a local PDF file using the system's default PDF viewer via FileProvider.
+     */
+    @PluginMethod()
+    public void openPdfFile(PluginCall call) {
+        String path = call.getString("path", "");
+        if (path.isEmpty()) {
+            JSObject result = new JSObject();
+            result.put("success", false);
+            result.put("error", "Chemin d'accès obligatoire");
+            call.resolve(result);
+            return;
+        }
+
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try {
+                File file = new File(path);
+                if (!file.exists()) {
+                    JSObject result = new JSObject();
+                    result.put("success", false);
+                    result.put("error", "Fichier PDF inexistant: " + path);
+                    call.resolve(result);
+                    return;
+                }
+
+                Uri fileUri = FileProvider.getUriForFile(
+                    getContext(),
+                    getContext().getPackageName() + ".fileprovider",
+                    file
+                );
+
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setDataAndType(fileUri, "application/pdf");
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                getContext().startActivity(intent);
+
+                JSObject result = new JSObject();
+                result.put("success", true);
+                call.resolve(result);
+            } catch (Exception e) {
+                Log.e(TAG, "openPdfFile error", e);
+                JSObject result = new JSObject();
+                result.put("success", false);
+                result.put("error", "Erreur ouverture PDF: " + e.getMessage());
+                call.resolve(result);
+            }
+        });
+    }
+
+    /**
+     * Retourne le User-Agent réel de la WebView Android de l'appareil.
+     * Permet au JS d'utiliser un UA dynamique et authentique plutôt qu'une chaîne statique,
+     * ce qui réduit le risque d'être détecté comme bot par Europresse.
+     */
+    @PluginMethod()
+    public void getWebViewUserAgent(PluginCall call) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try {
+                String ua = android.webkit.WebSettings.getDefaultUserAgent(getContext());
+                JSObject result = new JSObject();
+                result.put("userAgent", ua);
+                call.resolve(result);
+            } catch (Exception e) {
+                Log.e(TAG, "getWebViewUserAgent error", e);
+                // Fallback graceful — le JS utilisera son UA statique de secours
+                JSObject result = new JSObject();
+                result.put("userAgent", "");
+                call.resolve(result);
+            }
+        });
     }
 }
