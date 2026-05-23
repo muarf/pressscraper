@@ -854,10 +854,10 @@
                         fill.style.width = '100%';
                         card.className = 'status-card visible success';
                         icon.className = 'fas fa-check-circle';
-                        state.currentArticleId = job.article_id;
+                        state.currentArticleId = job.id;
 
                         addToHistory({
-                            id: job.article_id,
+                            id: job.id,
                             title: job.article_title || 'Article',
                             url: job.url,
                             source: job.source_site || '',
@@ -869,7 +869,7 @@
                         toast('✅ Article téléchargé !', 'success');
                         
                         window.Capacitor.Plugins.BackgroundPoll.stopPolling();
-                        openArticleById(job.article_id);
+                        openArticleById(job.id);
                     } else if (job.status === 'failed') {
                         clearInterval(state.pollInterval);
                         state.pollInterval = null;
@@ -911,11 +911,11 @@
                     fill.style.width = '100%';
                     card.className = 'status-card visible success';
                     icon.className = 'fas fa-check-circle';
-                    state.currentArticleId = job.article_id;
+                    state.currentArticleId = job.id;
 
                     // Add to history
                     addToHistory({
-                        id: job.article_id,
+                        id: job.id,
                         title: job.article_title || 'Article',
                         url: job.url,
                         source: job.source_site || '',
@@ -928,10 +928,10 @@
                     // Show native notification (only once per article)
                     if (!state.notificationSent) {
                         state.notificationSent = true;
-                        showNativeNotification('📰 Article téléchargé', job.article_title || 'Nouvel article', job.article_id);
+                        showNativeNotification('📰 Article téléchargé', job.article_title || 'Nouvel article', job.id);
                     }
                     // Open article automatically
-                    openArticleById(job.article_id);
+                    openArticleById(job.id);
                 } else if (job.status === 'failed') {
                     clearInterval(state.pollInterval);
                     state.pollInterval = null;
@@ -1287,8 +1287,21 @@
     };
 
     // ===== SHARED CONTENT =====
+    let lastProcessedIntentText = null;
+    let lastProcessedIntentTime = 0;
+
     window.handleSharedContent = function(text) {
-        console.log('[SHARE] handleSharedContent called with:', text);
+        if (!text) return;
+        const now = Date.now();
+        // Ignore if the same content is received within 4 seconds
+        if (text === lastProcessedIntentText && (now - lastProcessedIntentTime) < 4000) {
+            console.log('[SHARE] Ignoring duplicate shared content:', text);
+            return;
+        }
+        lastProcessedIntentText = text;
+        lastProcessedIntentTime = now;
+
+        console.log('[SHARE] handleSharedContent processing:', text);
         state.sharedText = text;
 
         // Switch to home screen immediately
@@ -1408,7 +1421,7 @@
                         apiCall('/job/' + state.currentJobId).then(job => {
                             if (job.status === 'completed' && job.article_title) {
                                 state.notificationSent = true;
-                                showNativeNotification('📰 Article téléchargé', job.article_title, job.article_id);
+                                showNativeNotification('📰 Article téléchargé', job.article_title, job.id);
                             }
                         }).catch(() => {});
                     }

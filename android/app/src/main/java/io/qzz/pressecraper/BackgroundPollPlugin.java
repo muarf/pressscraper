@@ -17,6 +17,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -106,10 +107,13 @@ public class BackgroundPollPlugin extends Plugin {
                         reader.close();
 
                         String body = sb.toString();
-                        // Parse status from JSON
-                        String status = extractJsonField(body, "status");
-                        String title = extractJsonField(body, "article_title");
-                        String articleId = extractJsonField(body, "article_id");
+                        JSONObject json = new JSONObject(body);
+                        String status = json.optString("status");
+                        String title = json.optString("article_title");
+                        String articleId = json.optString("id");
+                        if (articleId == null || articleId.isEmpty() || "null".equals(articleId)) {
+                            articleId = json.optString("article_id");
+                        }
 
                         Log.d(TAG, "Poll attempt " + attempts + ": status=" + status);
 
@@ -117,22 +121,22 @@ public class BackgroundPollPlugin extends Plugin {
                             isPolling = false;
                             showNotification(
                                 "📰 Article téléchargé",
-                                title != null ? title : "Nouvel article",
-                                articleId != null ? articleId : jobId
+                                (title != null && !title.isEmpty() && !"null".equals(title)) ? title : "Nouvel article",
+                                (articleId != null && !articleId.isEmpty()) ? articleId : jobId
                             );
                             JSObject ret = new JSObject();
                             ret.put("status", "completed");
-                            ret.put("articleId", articleId);
-                            ret.put("articleTitle", title);
+                            ret.put("articleId", (articleId != null && !articleId.isEmpty()) ? articleId : jobId);
+                            ret.put("articleTitle", (title != null && !title.isEmpty() && !"null".equals(title)) ? title : "Nouvel article");
                             notifyListeners("pollResult", ret);
                             return;
                         } else if ("failed".equals(status)) {
                             isPolling = false;
-                            String error = extractJsonField(body, "error_message");
-                            showNotification("❌ Échec du téléchargement", error != null ? error : "Erreur inconnue", null);
+                            String error = json.optString("error_message");
+                            showNotification("❌ Échec du téléchargement", (error != null && !error.isEmpty() && !"null".equals(error)) ? error : "Erreur inconnue", null);
                             JSObject ret = new JSObject();
                             ret.put("status", "failed");
-                            ret.put("error", error);
+                            ret.put("error", (error != null && !error.isEmpty() && !"null".equals(error)) ? error : "Erreur inconnue");
                             notifyListeners("pollResult", ret);
                             return;
                         }
@@ -172,7 +176,7 @@ public class BackgroundPollPlugin extends Plugin {
         if (intent != null) {
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             if (articleId != null) {
-                intent.putExtra("openArticle", articleId);
+                intent.putExtra("openArticleId", articleId);
             }
         }
 
