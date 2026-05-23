@@ -258,6 +258,10 @@
         const input = document.getElementById('urlInput').value.trim();
         if (!input) { toast('Entrez un lien d\'article ou des mots-clés', 'error'); return; }
 
+        if (window.Scraper) {
+            window.Scraper.lastQuery = null;
+        }
+
         let targetUrlOrQuery = '';
         let fallbackTitle = '';
 
@@ -376,6 +380,12 @@
             icon.className = 'fas fa-exclamation-triangle';
             document.getElementById('statusTitle').textContent = 'Erreur';
             document.getElementById('statusSub').textContent = e.message;
+            
+            // Si disponible, pré-remplit l'input avec les mots-clés générés pour modification
+            if (window.Scraper && window.Scraper.lastQuery) {
+                document.getElementById('urlInput').value = window.Scraper.lastQuery;
+            }
+            
             resetScrapeBtn();
         }
     };
@@ -408,6 +418,7 @@
     }
 
     window.closeArticle = function() {
+        document.getElementById('articleContent').innerHTML = '';
         switchScreen(state.lastActiveScreen || 'homeScreen');
     };
 

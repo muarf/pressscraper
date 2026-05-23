@@ -33,39 +33,32 @@
 
     /**
      * Transforme un titre en requête de recherche Europresse.
-     * Enlève les stopwords, les ponctuations et limite à maxWords mots.
+     * Nettoie et prépare le titre pour la recherche sans filtre ni limite de mots.
      */
-    function processTitleToQuery(title, maxWords) {
-        maxWords = maxWords || 15;
+    function processTitleToQuery(title) {
         if (!title) return null;
 
         let cleanTitle = title.split(/ - | \| | — | · /)[0];
-        cleanTitle = cleanTitle.replace(/[''""']/g, ' ');
+        // On supprime les apostrophes pour que "c'est" -> "cest", "l'info" -> "linfo"
+        cleanTitle = cleanTitle.replace(/[''""’‘`]/g, '');
         cleanTitle = cleanTitle.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()…?–—«»]/g, ' ');
 
-        const stopwords = new Set([
-            'le','la','les','du','de','des','d','au','aux','un','une','et','en',
-            'pour','dans','sur','par','est','sont','avec','votre','suivez','toute',
-            'lemonde','monde','lefigaro','figaro','liberation','mediapart','leparisien',
-            'actu','info','actualite','direct','video','presse','journal','qui','que',
-            'pas','plus','son','ses','mais','nous','vous','ils','elle','ces','ont'
-        ]);
-
-        const words = cleanTitle.toLowerCase().split(/\s+/);
+        const words = cleanTitle.toLowerCase().split(/\s+/).filter(Boolean);
         const filtered = [];
         const seen = new Set();
 
         for (const raw of words) {
             const cw = raw.replace(/[^\p{L}\d]/gu, '');
-            if (!cw || cw.length <= 2 || stopwords.has(cw)) continue;
+            // On exclut uniquement les lettres isolées de 1 caractère car non-indexées par Europresse
+            if (!cw || cw.length <= 1) continue;
             if (!seen.has(cw)) {
                 seen.add(cw);
                 filtered.push(cw);
             }
         }
 
-        if (filtered.length < 2) return null;
-        return filtered.slice(0, maxWords).join(' ');
+        if (filtered.length < 1) return null;
+        return filtered.join(' ');
     }
 
     /**
@@ -201,6 +194,7 @@
         if (!query) {
             throw new Error(`Impossible de construire des mots-clés depuis : « ${articleTitle} »`);
         }
+        window.Scraper.lastQuery = query;
         console.log('[SCRAPE] Query:', query, '| Original title:', articleTitle);
         onProgress('Étape 2/5', `Recherche: "${query.substring(0, 40)}..."`, 25);
 
@@ -344,11 +338,13 @@
         // Permet à la WebView Android d'appliquer des styles propres au rendu PDF.
         const PRINT_CSS = `
             @page { margin: 15mm 20mm; size: A4; }
-            body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000; background: #fff; padding: 0; margin: 0; }
-            h1 { font-size: 18pt; font-weight: bold; margin-bottom: 12pt; line-height: 1.3; border-bottom: 1px solid #ccc; padding-bottom: 8pt; page-break-after: avoid; }
-            p, li, blockquote, figure { page-break-inside: avoid; orphans: 3; widows: 3; }
-            img { max-width: 100%; page-break-inside: avoid; }
-            a::after { content: ""; }
+            @media print {
+                body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000; background: #fff; padding: 0; margin: 0; }
+                h1 { font-size: 18pt; font-weight: bold; margin-bottom: 12pt; line-height: 1.3; border-bottom: 1px solid #ccc; padding-bottom: 8pt; page-break-after: avoid; }
+                p, li, blockquote, figure { page-break-inside: avoid; orphans: 3; widows: 3; }
+                img { max-width: 100%; page-break-inside: avoid; }
+                a::after { content: ""; }
+            }
         `;
 
         const finalHtml = `<style>${PRINT_CSS}</style><h1>${cleanTitle}</h1>${cleanContent}`;

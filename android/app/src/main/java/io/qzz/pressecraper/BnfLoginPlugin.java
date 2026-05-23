@@ -745,15 +745,20 @@ public class BnfLoginPlugin extends Plugin {
      * Le fichier de préférences est chiffré avec AES-256-GCM pour les valeurs
      * et AES-256-SIV pour les clés.
      */
-    private SharedPreferences getEncryptedPrefs() throws Exception {
-        String masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
-        return EncryptedSharedPreferences.create(
-            CREDS_PREFS_FILE,
-            masterKeyAlias,
-            getContext(),
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        );
+    private SharedPreferences getEncryptedPrefs() {
+        try {
+            String masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
+            return EncryptedSharedPreferences.create(
+                CREDS_PREFS_FILE,
+                masterKeyAlias,
+                getContext(),
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            );
+        } catch (Throwable t) {
+            Log.e(TAG, "Failed to initialize EncryptedSharedPreferences, using standard fallback", t);
+            return getContext().getSharedPreferences("bnf_unsecure_prefs", android.content.Context.MODE_PRIVATE);
+        }
     }
 
     /**
