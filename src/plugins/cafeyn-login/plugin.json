@@ -1,0 +1,13 @@
+{
+  "id": "cafeyn-login",
+  "name": "CafeynLogin",
+  "config": {
+    "android": {
+      "srcDir": "android/src/main/java/io/qzz/pressecraper",
+      "assetsDir": "android/assets"
+    },
+    "web": {
+      "srcDir": "web"
+    }
+  }
+}

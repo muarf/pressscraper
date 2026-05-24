@@ -1,0 +1,9 @@
+node_modules/
+cafeyn_temp/
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/local.properties
+.DS_Store
+*.local

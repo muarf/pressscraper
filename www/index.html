@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f0f1a">
+    <title>Presse Scraper</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ONBOARDING SCREEN -->
+<div id="onboardingScreen" class="onboarding" style="display:none;">
+    <i class="fas fa-newspaper logo" style="color:var(--accent)"></i>
+    <h2>Connexion à Europresse</h2>
+    <p class="subtitle">Entrez vos identifiants BnF pour accéder aux articles.<br>Vos credentials restent sur votre appareil.</p>
+    <div class="form-group">
+        <label>Identifiant BnF</label>
+        <input type="text" id="onboardUsername" placeholder="Votre identifiant..." autocomplete="off">
+    </div>
+    <div class="form-group">
+        <label>Mot de passe BnF</label>
+        <input type="password" id="onboardPassword" placeholder="Votre mot de passe..." autocomplete="off">
+    </div>
+    <button class="btn-primary" id="onboardLoginBtn" onclick="onboardLogin()">
+        <i class="fas fa-key"></i> Se connecter
+    </button>
+    <button class="btn-secondary" id="onboardSkipBtn" onclick="skipOnboarding()">
+        Passer / Configurer plus tard
+    </button>
+    <div class="error-msg" id="onboardError"></div>
+    <div class="success-msg" id="onboardSuccess"></div>
+    <div class="links">
+        <a href="https://bnf.idm.oclc.org/login" target="_blank" onclick="openExternal(this.href); return false;">
+            <i class="fas fa-user-plus"></i> Créer un compte BnF
+        </a>
+        <a href="https://bnf.idm.oclc.org/forgot" target="_blank" onclick="openExternal(this.href); return false;">
+            <i class="fas fa-question-circle"></i> Identifiants oubliés ?
+        </a>
+    </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" style="display:none;">
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1><i class="fas fa-newspaper"></i> Presse Scraper</h1>
+            <span class="session-dot none" id="sessionDot" title="Session BnF"></span>
+        </header>
+
+        <!-- HOME SCREEN -->
+        <div class="screen active" id="homeScreen">
+            <div class="shared-banner" id="sharedBanner">
+                <i class="fas fa-share-alt icon"></i>
+                <div class="text">
+                    <div class="label" id="sharedLabel">Contenu partagé</div>
+                    <div class="content" id="sharedContent"></div>
+                </div>
+                <button class="use-btn" id="useSharedBtn">Utiliser</button>
+            </div>
+
+            <div class="input-card">
+                <label>Lien d'article ou mots-clés de recherche</label>
+                <div class="input-row">
+                    <input type="text" id="urlInput" placeholder="Collez un lien ou entrez des mots-clés..." autocomplete="off">
+                    <button class="scrape-btn" id="scrapeBtn" onclick="startScraping()">
+                        <i class="fas fa-magic"></i> Scraper
+                    </button>
+                </div>
+            </div>
+
+            <div class="status-card" id="statusCard">
+                <div class="status-icon"><i class="fas fa-spinner" id="statusIcon"></i></div>
+                <div class="status-title" id="statusTitle">Initialisation...</div>
+                <div class="status-sub" id="statusSub"></div>
+                <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                <div class="action-row" id="actionRow" style="display:none;">
+                    <button class="action-btn primary" id="openArticleBtn" onclick="openArticle()" style="display:none;"><i class="fas fa-eye"></i> Ouvrir l'article</button>
+                </div>
+            </div>
+
+            <div class="section-title"><i class="fas fa-history"></i> Historique</div>
+            <div id="historyList"><div class="empty"><i class="fas fa-inbox"></i><p>Aucun article</p></div></div>
+        </div>
+
+        <!-- HISTORY SCREEN -->
+        <div class="screen" id="historyScreen">
+            <div class="section-title"><i class="fas fa-history"></i> Historique des articles</div>
+            <div id="fullHistoryList"><div class="empty"><i class="fas fa-inbox"></i><p>Aucun article</p></div></div>
+        </div>
+
+        <!-- SETTINGS SCREEN -->
+        <div class="screen" id="settingsScreen">
+            <div class="settings-group">
+                <h3>Ordre des fournisseurs</h3>
+                <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
+                    Activez/désactivez et ordonnez vos fournisseurs par priorité.
+                    Le premier actif sera essayé en premier.
+                </p>
+                <div id="providerOrderList"></div>
+            </div>
+
+            <div class="settings-group" id="bnfProviderConfig" style="display:none;">
+                <h3>BnF Europresse</h3>
+                <div class="cookie-status" id="cookieStatus">
+                    <div class="dot none" id="cookieDot"></div>
+                    <span id="cookieText">Non connecté</span>
+                </div>
+                <div id="bnfUserDisplay" style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;padding:0 4px;"></div>
+                <button class="action-btn secondary" id="reconnectBnfBtn" style="width:100%;margin-bottom:6px;" onclick="reconnectBnf()">
+                    <i class="fas fa-key"></i> Se reconnecter
+                </button>
+                <button class="action-btn secondary" id="disconnectBnfBtn" style="width:100%;" onclick="disconnectBnf()">
+                    <i class="fas fa-sign-out-alt"></i> Se déconnecter
+                </button>
+            </div>
+
+            <div class="settings-group" id="cafeynProviderConfig" style="display:none;">
+                <h3>Cafeyn</h3>
+                <div class="cookie-status" id="cafeynStatus">
+                    <div class="dot none" id="cafeynDot"></div>
+                    <span id="cafeynText">Non connecté</span>
+                </div>
+                <div id="cafeynUserDisplay" style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;padding:0 4px;"></div>
+                <button class="action-btn secondary" id="reconnectCafeynBtn" style="width:100%;margin-bottom:6px;" onclick="reconnectCafeyn()">
+                    <i class="fas fa-key"></i> Se connecter (WebView)
+                </button>
+                <div class="form-group">
+                    <label>Token JWT Cafeyn (manuel)</label>
+                    <input type="text" id="cafeynTokenInput" class="form-input" placeholder="Collez votre JWT ici...">
+                </div>
+                <button class="action-btn primary" id="saveCafeynTokenBtn" style="width:100%;margin-bottom:6px;" onclick="saveCafeynToken()">
+                    <i class="fas fa-save"></i> Sauvegarder le token
+                </button>
+                <button class="action-btn secondary" id="clearCafeynTokenBtn" style="width:100%;" onclick="clearCafeynToken()">
+                    <i class="fas fa-trash"></i> Effacer le token
+                </button>
+            </div>
+
+            <div class="settings-group" id="pressreaderProviderConfig" style="display:none;">
+                <h3>PressReader</h3>
+                <p style="font-size:13px;color:var(--text-secondary);padding:8px 4px;">
+                    ⏳ <em>Configuration PressReader à venir</em>
+                </p>
+            </div>
+            </div>
+
+            <div class="settings-group" id="bpcProviderConfig" style="display:none;">
+                <h3>Scraping Direct (Bypass Paywall)</h3>
+                <div class="setting-item">
+                    <div class="label">Activer le contournement direct</div>
+                    <label class="switch">
+                        <input type="checkbox" id="directScrapingToggle" onchange="toggleDirectScraping(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="cookie-status" style="margin-bottom:8px;">
+                    <div class="dot none" id="bpcRulesDot"></div>
+                    <span id="bpcRulesText">Règles locales actives</span>
+                </div>
+                <button class="action-btn secondary" id="updateBpcBtn" style="width:100%;" onclick="updateBpcRules()">
+                    <i class="fas fa-sync"></i> Mettre à jour les règles
+                </button>
+            </div>
+
+            <div class="settings-group">
+                <h3>Stockage local</h3>
+                <div class="setting-item">
+                    <div class="label">Articles sauvegardés</div>
+                    <div class="value" id="cacheCount">0</div>
+                </div>
+                <button class="action-btn secondary" onclick="clearCache()" style="width:100%;margin-top:8px;">
+                    <i class="fas fa-trash"></i> Vider le cache
+                </button>
+            </div>
+        </div>
+
+        <!-- ARTICLE VIEWER SCREEN -->
+        <div class="screen" id="articleScreen">
+            <div class="article-header">
+                <button class="back-btn" onclick="closeArticle()"><i class="fas fa-arrow-left"></i></button>
+                <span class="article-title" id="viewerArticleTitle"></span>
+                <button class="copy-btn" onclick="copyArticleText()" title="Copier le texte"><i class="fas fa-copy"></i></button>
+                <button class="share-btn" onclick="shareArticle()" title="Partager l'article"><i class="fas fa-share-alt"></i></button>
+                <button class="delete-btn" onclick="confirmDeleteArticle()" title="Supprimer l'article"><i class="fas fa-trash"></i></button>
+                <button class="pdf-btn" onclick="openPdf()"><i class="fas fa-file-pdf"></i> PDF</button>
+            </div>
+            <div class="article-content" id="articleContent"></div>
+        </div>
+
+        <!-- Toast -->
+        <div class="toast" id="toast"><i class="fas fa-info-circle"></i><span id="toastText"></span></div>
+
+        <!-- Bottom nav -->
+        <nav class="bottom-nav">
+            <button class="nav-btn active" data-screen="homeScreen" onclick="switchScreen('homeScreen')">
+                <i class="fas fa-home"></i><span>Accueil</span>
+            </button>
+            <button class="nav-btn" data-screen="historyScreen" onclick="switchScreen('historyScreen')">
+                <i class="fas fa-history"></i><span>Historique</span>
+            </button>
+            <button class="nav-btn" data-screen="settingsScreen" onclick="switchScreen('settingsScreen')">
+                <i class="fas fa-cog"></i><span>Paramètres</span>
+            </button>
+        </nav>
+    </div>
+</div>
+
+<!-- Scripts : ordre de chargement important -->
+<script src="js/db.js"></script>
+<script src="js/scraper.js"></script>
+<script src="js/cafeyn.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
