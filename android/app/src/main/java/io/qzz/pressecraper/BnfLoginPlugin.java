@@ -58,13 +58,39 @@ public class BnfLoginPlugin extends Plugin {
     public void load() {
         super.load();
         try {
-            java.net.CookieManager cookieManager = new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL);
+            java.net.CookieManager cookieManager = new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL) {
+                @Override
+                public Map<String, List<String>> get(java.net.URI uri, Map<String, List<String>> requestHeaders) throws java.io.IOException {
+                    Map<String, List<String>> cookies = new HashMap<>();
+                    String url = uri.toString();
+                    String cookieVal = android.webkit.CookieManager.getInstance().getCookie(url);
+                    if (cookieVal != null && !cookieVal.isEmpty()) {
+                        List<String> list = new ArrayList<>();
+                        list.add(cookieVal);
+                        cookies.put("Cookie", list);
+                    }
+                    return cookies;
+                }
+
+                @Override
+                public void put(java.net.URI uri, Map<String, List<String>> responseHeaders) throws java.io.IOException {
+                    String url = uri.toString();
+                    List<String> setCookieHeaders = responseHeaders.get("Set-Cookie");
+                    if (setCookieHeaders != null) {
+                        for (String header : setCookieHeaders) {
+                            android.webkit.CookieManager.getInstance().setCookie(url, header);
+                        }
+                        android.webkit.CookieManager.getInstance().flush();
+                    }
+                }
+            };
             java.net.CookieHandler.setDefault(cookieManager);
-            Log.d(TAG, "CookieHandler initialized successfully");
+            Log.d(TAG, "WebView-backed CookieHandler initialized successfully");
         } catch (Exception e) {
             Log.e(TAG, "Failed to initialize CookieHandler", e);
         }
     }
+
 
     @PluginMethod()
     public void login(PluginCall call) {
@@ -284,7 +310,7 @@ public class BnfLoginPlugin extends Plugin {
             return;
         }
 
-        Log.d(TAG, "HTTP Request: " + method.toUpperCase() + " " + urlStr);
+        Log.i(TAG, "HTTP Request: " + method.toUpperCase() + " " + urlStr);
 
         // Run on background thread
         new Thread(() -> {
@@ -311,29 +337,34 @@ public class BnfLoginPlugin extends Plugin {
                     }
                 }
 
-                // Merge JS Cookie header with system CookieHandler store
+                // Merge JS Cookie header with WebView cookies for this URL
                 StringBuilder mergedCookies = new StringBuilder();
                 if (jsCookie != null && !jsCookie.isEmpty()) {
                     mergedCookies.append(jsCookie);
                 }
                 try {
-                    java.net.CookieManager cookieManager = (java.net.CookieManager) java.net.CookieHandler.getDefault();
-                    if (cookieManager != null) {
-                        for (java.net.HttpCookie cookie : cookieManager.getCookieStore().getCookies()) {
-                            if (mergedCookies.length() > 0) {
-                                mergedCookies.append("; ");
+                    String webViewCookie = android.webkit.CookieManager.getInstance().getCookie(urlStr);
+                    if (webViewCookie != null && !webViewCookie.isEmpty()) {
+                        String[] pairs = webViewCookie.split(";");
+                        for (String pair : pairs) {
+                            String trimmedPair = pair.trim();
+                            if (!trimmedPair.isEmpty() && mergedCookies.indexOf(trimmedPair) == -1) {
+                                if (mergedCookies.length() > 0) {
+                                    mergedCookies.append("; ");
+                                }
+                                mergedCookies.append(trimmedPair);
                             }
-                            mergedCookies.append(cookie.getName()).append("=").append(cookie.getValue());
                         }
                     }
                 } catch (Exception ce) {
-                    Log.w(TAG, "   Error retrieving system cookies: " + ce.getMessage());
+                    Log.w(TAG, "   Error retrieving WebView cookies: " + ce.getMessage());
                 }
+
 
                 if (mergedCookies.length() > 0) {
                     String finalCookies = mergedCookies.toString();
                     conn.setRequestProperty("Cookie", finalCookies);
-                    Log.d(TAG, "   Merged Cookie Header: " + (finalCookies.length() > 60 ? finalCookies.substring(0, 60) + "..." : finalCookies));
+                    Log.i(TAG, "   Merged Cookie Header: " + finalCookies);
                 }
 
                 // Set body for POST/PUT
@@ -344,11 +375,11 @@ public class BnfLoginPlugin extends Plugin {
                     os.write(bodyStr.getBytes("UTF-8"));
                     os.flush();
                     os.close();
-                    Log.d(TAG, "   Request Body size: " + bodyStr.length() + " chars");
+                    Log.i(TAG, "   Request Body size: " + bodyStr.length() + " chars");
                 }
 
                 int status = conn.getResponseCode();
-                Log.d(TAG, "   Response Status Code: " + status);
+                Log.i(TAG, "   Response Status Code: " + status);
 
                 int redirectCount = 0;
                 String finalCookies = mergedCookies.toString();
@@ -363,7 +394,24 @@ public class BnfLoginPlugin extends Plugin {
                     URL base = conn.getURL();
                     URL next = new URL(base, location);
 
-                    Log.d(TAG, "   Redirecting (" + redirectCount + ") to: " + next.toExternalForm());
+                    Log.i(TAG, "   Redirecting (" + redirectCount + ") to: " + next.toExternalForm());
+
+                    // Store cookies from redirect response
+                    try {
+                        java.util.Map<String, java.util.List<String>> redirectHeaders = conn.getHeaderFields();
+                        String redirectSourceUrl = conn.getURL().toExternalForm();
+                        for (java.util.Map.Entry<String, java.util.List<String>> entry : redirectHeaders.entrySet()) {
+                            String key = entry.getKey();
+                            if (key != null && key.equalsIgnoreCase("Set-Cookie")) {
+                                for (String cookieVal : entry.getValue()) {
+                                    android.webkit.CookieManager.getInstance().setCookie(redirectSourceUrl, cookieVal);
+                                }
+                            }
+                        }
+                        android.webkit.CookieManager.getInstance().flush();
+                    } catch (Exception ce) {
+                        Log.w(TAG, "   Error storing intermediate redirect cookies: " + ce.getMessage());
+                    }
 
                     conn = (HttpURLConnection) next.openConnection();
                     conn.setRequestMethod("GET"); // POST redirects are followed as GET
@@ -373,20 +421,22 @@ public class BnfLoginPlugin extends Plugin {
                     // Update finalCookies with newly stored cookies in CookieManager
                     StringBuilder newCookies = new StringBuilder(finalCookies);
                     try {
-                        java.net.CookieManager cookieManager = (java.net.CookieManager) java.net.CookieHandler.getDefault();
-                        if (cookieManager != null) {
-                            for (java.net.HttpCookie cookie : cookieManager.getCookieStore().getCookies()) {
-                                String cookieString = cookie.getName() + "=" + cookie.getValue();
-                                if (newCookies.indexOf(cookieString) == -1) {
+                        String redirectUrl = next.toExternalForm();
+                        String webViewCookie = android.webkit.CookieManager.getInstance().getCookie(redirectUrl);
+                        if (webViewCookie != null && !webViewCookie.isEmpty()) {
+                            String[] pairs = webViewCookie.split(";");
+                            for (String pair : pairs) {
+                                String trimmedPair = pair.trim();
+                                if (!trimmedPair.isEmpty() && newCookies.indexOf(trimmedPair) == -1) {
                                     if (newCookies.length() > 0) {
                                         newCookies.append("; ");
                                     }
-                                    newCookies.append(cookieString);
+                                    newCookies.append(trimmedPair);
                                 }
                             }
                         }
                     } catch (Exception ce) {
-                        Log.w(TAG, "   Error merging redirect cookies: " + ce.getMessage());
+                        Log.w(TAG, "   Error merging redirect WebView cookies: " + ce.getMessage());
                     }
                     finalCookies = newCookies.toString();
 
@@ -405,17 +455,26 @@ public class BnfLoginPlugin extends Plugin {
                     }
 
                     status = conn.getResponseCode();
-                    Log.d(TAG, "   Redirect Response Status Code: " + status);
+                    Log.i(TAG, "   Redirect Response Status Code: " + status);
                 }
 
-                // Log final response headers (especially Set-Cookie)
+                // Log final response headers (especially Set-Cookie) and store them in WebView CookieManager
                 java.util.Map<String, java.util.List<String>> headerFields = conn.getHeaderFields();
+                String currentUrl = conn.getURL().toExternalForm();
                 for (java.util.Map.Entry<String, java.util.List<String>> entry : headerFields.entrySet()) {
                     String key = entry.getKey();
                     if (key != null && key.equalsIgnoreCase("Set-Cookie")) {
                         for (String cookieVal : entry.getValue()) {
-                            Log.d(TAG, "   Response Set-Cookie: " + cookieVal);
+                            Log.i(TAG, "   Response Set-Cookie: " + cookieVal);
+                            try {
+                                android.webkit.CookieManager.getInstance().setCookie(currentUrl, cookieVal);
+                            } catch (Exception ce) {
+                                Log.w(TAG, "   Error storing response cookie: " + ce.getMessage());
+                            }
                         }
+                        try {
+                            android.webkit.CookieManager.getInstance().flush();
+                        } catch (Exception ce) {}
                     }
                 }
 
@@ -433,7 +492,7 @@ public class BnfLoginPlugin extends Plugin {
                 }
                 br.close();
 
-                Log.d(TAG, "   Response Body size: " + sb.length() + " chars");
+                Log.i(TAG, "   Response Body size: " + sb.length() + " chars");
 
                 JSObject result = new JSObject();
                 result.put("status", status);

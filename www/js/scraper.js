@@ -13,6 +13,268 @@
     // UA de secours utilisé si le plugin natif n'est pas disponible (tests navigateur)
     const UA_FALLBACK = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 
+    // ===== BnF PROXY CONFIG =====
+    // Correspondances : domaine original → sous-domaine EZProxy BnF
+    const BNF_PROXY_SITES = [
+        {
+            // Mediapart
+            domains: ['mediapart.fr', 'www.mediapart.fr'],
+            proxyHost: 'www-mediapart-fr.bnf.idm.oclc.org',
+            name: 'Mediapart',
+            // Sélecteur du bloc de contenu de l'article
+            contentSelector: '.content-article, .article__content, [data-module="article-body"], .article-body',
+            // Sélecteur du paywall résiduel éventuel
+            paywallSelector: '.paywall, #paywall, [class*="paywall"], .register-wall, .subscribe'
+        },
+        {
+            // Arrêt sur Images
+            domains: ['arretsurimages.net', 'www.arretsurimages.net'],
+            proxyHost: 'www-arretsurimages-net.bnf.idm.oclc.org',
+            name: 'Arrêt sur Images',
+            contentSelector: '.article-content, .entry-content, .post-content, article .content, [class*="article-body"]',
+            paywallSelector: '.paywall, #paywall, [class*="paywall"], .subscribe-wall'
+        }
+    ];
+
+    /**
+     * Retourne la config BnF proxy si l'URL correspond à un site supporté,
+     * qu'il s'agisse de l'URL originale ou d'une URL déjà proxifiée.
+     * @param {string} url
+     * @returns {{ proxyHost, name, contentSelector, paywallSelector, proxyUrl } | null}
+     */
+    function getBnfProxySiteConfig(url) {
+        try {
+            const urlObj = new URL(url);
+            const hostname = urlObj.hostname;
+
+            for (const site of BNF_PROXY_SITES) {
+                // Cas 1 : URL originale (ex: www.mediapart.fr)
+                if (site.domains.includes(hostname)) {
+                    // Convertir en URL proxy : même chemin sur le proxyHost
+                    const proxyUrl = `https://${site.proxyHost}${urlObj.pathname}${urlObj.search}${urlObj.hash}`;
+                    return { ...site, proxyUrl };
+                }
+                // Cas 2 : URL déjà proxifiée (ex: www-mediapart-fr.bnf.idm.oclc.org)
+                if (hostname === site.proxyHost) {
+                    return { ...site, proxyUrl: url };
+                }
+            }
+        } catch(e) {/* URL invalide */}
+        return null;
+    }
+
+    /**
+     * Scrape un article via la session BnF EZProxy active.
+     * Le cookie ezproxy est automatiquement injecté par la couche native Java
+     * (CookieManager partagé) pour tous les sous-domaines *.bnf.idm.oclc.org.
+     *
+     * @param {string} proxyUrl  — URL complète sur le domaine BnF proxy
+     * @param {object} siteConfig — Config du site BnF (name, contentSelector, paywallSelector)
+     * @param {string} cookieHeader — Cookies Europresse/BnF pour l'authentification JS
+     * @param {string} UA — User-Agent
+     * @param {function} onProgress — Callback de progression
+     * @returns {Promise<{html, title, source, url}>}
+     */
+    async function scrapeBnfProxy(proxyUrl, originalUrl, siteConfig, cookieHeader, UA, onProgress) {
+        const BnfLogin = window.Capacitor.Plugins.BnfLogin;
+        const PRINT_CSS = `
+            @page { margin: 15mm 20mm; size: A4; }
+            @media print {
+                body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000; background: #fff; padding: 0; margin: 0; }
+                h1 { font-size: 18pt; font-weight: bold; margin-bottom: 12pt; line-height: 1.3; border-bottom: 1px solid #ccc; padding-bottom: 8pt; page-break-after: avoid; }
+                p, li, blockquote, figure { page-break-inside: avoid; orphans: 3; widows: 3; }
+                img { max-width: 100%; page-break-inside: avoid; }
+                a::after { content: ""; }
+            }
+        `;
+
+        onProgress('BnF Proxy', `Téléchargement via BnF (${siteConfig.name})...`, 15);
+
+        // ── Authentification / Initialisation spécifique des sessions proxy ──
+        if (siteConfig.name === 'Arrêt sur Images') {
+            onProgress('BnF Proxy', 'Authentification Arrêt sur Images...', 20);
+            try {
+                const autologinRes = await BnfLogin.httpRequest({
+                    url: 'https://bnf.idm.oclc.org/login?url=http://www.arretsurimages.net/autologin.php',
+                    method: 'GET',
+                    headers: {
+                        'User-Agent': UA,
+                        'Cookie': cookieHeader,
+                        'Referer': 'https://www.google.com/'
+                    }
+                });
+
+                if (autologinRes && !autologinRes.error && autologinRes.data) {
+                    const tokenMatch = autologinRes.data.match(/localStorage\.setItem\('auth_access_token',\s*'([^']+)'\)/);
+                    if (tokenMatch) {
+                        const token = tokenMatch[1];
+                        let slug = '';
+                        try {
+                            const urlObj = new URL(originalUrl || proxyUrl);
+                            const parts = urlObj.pathname.split('/');
+                            slug = parts[parts.length - 1] || parts[parts.length - 2];
+                        } catch(e) {}
+
+                        if (slug) {
+                            onProgress('BnF Proxy', 'Récupération via l\'API...', 40);
+                            const apiUrl = `https://api-arretsurimages-net.bnf.idm.oclc.org/api/public/contents/articles/${slug}?access_token=${token}`;
+                            const apiRes = await BnfLogin.httpRequest({
+                                url: apiUrl,
+                                method: 'GET',
+                                headers: {
+                                    'User-Agent': UA,
+                                    'Cookie': cookieHeader
+                                }
+                            });
+
+                            if (apiRes && !apiRes.error && apiRes.data) {
+                                const articleData = JSON.parse(apiRes.data);
+                                if (articleData && articleData.content) {
+                                    const pageTitle = articleData.title || siteConfig.name;
+                                    const subtitle = articleData.subtitle ? `<p class="subtitle" style="font-weight: bold; font-size: 1.2em; margin-bottom: 20px; color: #555;">${articleData.subtitle}</p>` : '';
+                                    const lead = articleData.lead ? `<p class="lead" style="font-style: italic; margin-bottom: 20px; color: #333;">${articleData.lead}</p>` : '';
+                                    const finalHtml = `<style>${PRINT_CSS}</style><h1>${pageTitle}</h1>${subtitle}${lead}${articleData.content}`;
+                                    onProgress('BnF Proxy', 'Succès !', 95);
+                                    return {
+                                        html: finalHtml,
+                                        title: pageTitle,
+                                        source: siteConfig.name + ' (BnF)',
+                                        url: originalUrl || proxyUrl
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('[BnF Proxy] Échec de la récupération Arrêt sur Images via API, repli sur le scrap standard :', err);
+            }
+        } else if (siteConfig.name === 'Mediapart') {
+            onProgress('BnF Proxy', 'Activation de la licence Mediapart...', 20);
+            try {
+                // Initialise la session de licence sur Mediapart en suivant les redirections
+                await BnfLogin.httpRequest({
+                    url: 'https://bnf.idm.oclc.org/login?url=http://www.mediapart.fr/licence',
+                    method: 'GET',
+                    headers: {
+                        'User-Agent': UA,
+                        'Cookie': cookieHeader,
+                        'Referer': 'https://www.google.com/'
+                    }
+                });
+            } catch (err) {
+                console.warn('[BnF Proxy] Échec d\'activation de la licence Mediapart :', err);
+            }
+        }
+
+        const pageRes = await BnfLogin.httpRequest({
+            url: proxyUrl,
+            method: 'GET',
+            headers: {
+                'User-Agent': UA,
+                'Cookie': cookieHeader,
+                'Referer': 'https://www.google.com/'
+            }
+        });
+
+        if (!pageRes || pageRes.error) {
+            throw new Error(`[BnF Proxy] Erreur réseau : ${pageRes?.error || 'inconnue'}`);
+        }
+        if (pageRes.status >= 400) {
+            throw new Error(`[BnF Proxy] HTTP ${pageRes.status} pour ${proxyUrl}`);
+        }
+
+        const html = pageRes.data || '';
+
+        // ── Détection de la page de login BnF (session expirée) ──
+        // IMPORTANT : l'EZProxy injecte dans TOUTES les pages proxifiées une barre
+        // de navigation contenant un lien de déconnexion du type :
+        //   https://bnf.idm.oclc.org/login?action=logout&...
+        // Donc on ne peut PAS détecter la session expirée avec une simple recherche
+        // de chaîne sur 'bnf.idm.oclc.org/login' — ça génère des faux positifs.
+        //
+        // La vraie page de login BnF contient des <input> réels nommés j_username
+        // et j_password. On parse d'abord le DOM pour une détection précise.
+        onProgress('BnF Proxy', 'Extraction du contenu...', 50);
+
+        // ── Parsing DOM ──
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        // Détecter la vraie page de login BnF/OCLC par des marqueurs SPÉCIFIQUES à OCLC.
+        // Les sites comme Mediapart ont leurs propres formulaires de login dans les pages
+        // d'articles — on ne peut donc pas chercher des noms génériques comme "username".
+        // On cherche uniquement les champs nommés j_username/j_password (propres à OCLC)
+        // ou une action de formulaire pointant vers idm.oclc.org.
+        const oclcUsernameInput = doc.querySelector('input[name="j_username"]');
+        const oclcPasswordInput = doc.querySelector('input[name="j_password"]');
+        const oclcLoginForm     = doc.querySelector('form[action*="idm.oclc.org"], form[action*="bnf.idm"]');
+        const pageDocTitle = (doc.title || '').toLowerCase();
+        const isLoginPage = !!(oclcUsernameInput && oclcPasswordInput)
+            || !!oclcLoginForm
+            || pageDocTitle === 'login'
+            || pageDocTitle === 'authentication required';
+
+        console.log('[BnF Proxy] Login page check — title:', doc.title, '| isLoginPage:', isLoginPage);
+
+        if (isLoginPage) {
+            throw new Error('Session BnF expirée. Veuillez vous reconnecter dans les paramètres.');
+        }
+
+        onProgress('BnF Proxy', 'Extraction du contenu...', 60);
+
+        // Récupération du titre
+        const pageTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')
+            || doc.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
+            || doc.title
+            || siteConfig.name;
+
+        // Recherche du bloc de contenu
+        let contentEl = null;
+        const selectors = siteConfig.contentSelector.split(',').map(s => s.trim());
+        for (const sel of selectors) {
+            contentEl = doc.querySelector(sel);
+            if (contentEl) break;
+        }
+        // Fallback générique
+        if (!contentEl) {
+            contentEl = doc.querySelector('article')
+                || doc.querySelector('[itemprop="articleBody"]')
+                || doc.querySelector('.article-body')
+                || doc.querySelector('.article')
+                || doc.body;
+        }
+
+        // ── Validation : vérifier que le paywall n'est pas encore actif ──
+        const paywallEl = doc.querySelector(siteConfig.paywallSelector);
+        const textLength = contentEl ? contentEl.textContent.trim().length : 0;
+        console.log(`[BnF Proxy] ${siteConfig.name} — textLength: ${textLength}, hasPaywall: ${!!paywallEl}`);
+
+        if (paywallEl && textLength < 800) {
+            // Probablement non authentifié ou accès refusé
+            throw new Error(`[BnF Proxy] Paywall encore actif sur ${siteConfig.name}. Vérifiez que votre session BnF donne accès à ce titre.`);
+        }
+
+        // ── Nettoyage : supprimer les éléments parasites ──
+        if (contentEl) {
+            // Supprimer les widgets d'inscription/abonnement résiduels
+            contentEl.querySelectorAll(
+                siteConfig.paywallSelector + ', .newsletter-block, .social-share, .related-articles, nav, footer, .ads, [class*="banner"]'
+            ).forEach(el => el.remove());
+        }
+
+        onProgress('BnF Proxy', 'Mise en forme...', 85);
+
+        const finalHtml = `<style>${PRINT_CSS}</style><h1>${pageTitle}</h1>${contentEl ? contentEl.innerHTML : ''}`;
+
+        return {
+            html: finalHtml,
+            title: pageTitle,
+            source: siteConfig.name + ' (BnF)',
+            url: originalUrl || proxyUrl
+        };
+    }
+
     // ===== BPC STATE & CONFIG =====
     let bpcSites = null;
     let bpcScript = null;
@@ -250,7 +512,47 @@
         const UA = await getUA(); // UA dynamique depuis la WebView système
 
         const isUrl = titleOrUrl.startsWith('http');
-        
+
+        // ============================================
+        // === INTERCEPTION BnF PROXY (PRIORITAIRE) ===
+        // === Mediapart & Arrêt sur Images via BnF  ===
+        // ============================================
+        //
+        // Condition : les cookies de session BnF sont présents (cookieHeader non vide),
+        // OU l'utilisateur a un compte BnF connu (bnfUsername défini).
+        // On ne bloque PAS sur bnfPassword car les identifiants peuvent être dans
+        // EncryptedSharedPreferences sans être chargés dans l'état JS.
+        const hasBnfSession = !!(cookieHeader || state.bnfUsername);
+        console.log('[BnF Proxy] Check — isUrl:', isUrl, '| hasBnfSession:', hasBnfSession, '| cookieHeader length:', cookieHeader.length, '| username:', !!state.bnfUsername);
+
+        if (isUrl && hasBnfSession) {
+            const bnfProxyConfig = getBnfProxySiteConfig(titleOrUrl);
+            console.log('[BnF Proxy] proxyConfig for URL:', titleOrUrl, '→', bnfProxyConfig ? bnfProxyConfig.name : 'no match');
+            if (bnfProxyConfig) {
+                console.log('[BnF Proxy] Match trouvé pour:', titleOrUrl, '→', bnfProxyConfig.proxyUrl);
+                onProgress('BnF Proxy', `Accès BnF pour ${bnfProxyConfig.name}...`, 10);
+                try {
+                    const scraped = await scrapeBnfProxy(
+                        bnfProxyConfig.proxyUrl,
+                        titleOrUrl,
+                        bnfProxyConfig,
+                        cookieHeader,
+                        UA,
+                        onProgress
+                    );
+                    onProgress('BnF Proxy', 'Succès !', 95);
+                    return scraped;
+                } catch (bnfErr) {
+                    // Relancer les erreurs de session expirée pour que app.js puisse re-logger
+                    if (bnfErr.message && bnfErr.message.includes('Session BnF expirée')) {
+                        throw bnfErr;
+                    }
+                    // Sinon : log et tentative de fallback BPC
+                    console.warn('[BnF Proxy] Échec, tentative de fallback BPC:', bnfErr.message);
+                }
+            }
+        }
+
         // ==========================================
         // === INTERCEPTION BYPASS PAYWALLS (BPC) ===
         // ==========================================
