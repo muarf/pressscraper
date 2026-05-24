@@ -22,7 +22,7 @@
             proxyHost: 'www-mediapart-fr.bnf.idm.oclc.org',
             name: 'Mediapart',
             // Sélecteur du bloc de contenu de l'article
-            contentSelector: '.content-article, .article__content, [data-module="article-body"], .article-body',
+            contentSelector: '.paywall-restricted-content, .news__body__center__article, .content-article, .article__content, [data-module="article-body"], .article-body',
             // Sélecteur du paywall résiduel éventuel
             paywallSelector: '.paywall, #paywall, [class*="paywall"], .register-wall, .subscribe'
         },
@@ -108,16 +108,22 @@
                     const tokenMatch = autologinRes.data.match(/localStorage\.setItem\('auth_access_token',\s*'([^']+)'\)/);
                     if (tokenMatch) {
                         const token = tokenMatch[1];
+                        let type = 'articles';
                         let slug = '';
                         try {
                             const urlObj = new URL(originalUrl || proxyUrl);
-                            const parts = urlObj.pathname.split('/');
-                            slug = parts[parts.length - 1] || parts[parts.length - 2];
+                            const pathSegments = urlObj.pathname.split('/').filter(Boolean);
+                            if (pathSegments.length >= 2) {
+                                type = pathSegments[0];
+                                slug = pathSegments[pathSegments.length - 1];
+                            } else {
+                                slug = pathSegments[0] || '';
+                            }
                         } catch(e) {}
 
                         if (slug) {
                             onProgress('BnF Proxy', 'Récupération via l\'API...', 40);
-                            const apiUrl = `https://api-arretsurimages-net.bnf.idm.oclc.org/api/public/contents/articles/${slug}?access_token=${token}`;
+                            const apiUrl = `https://api-arretsurimages-net.bnf.idm.oclc.org/api/public/contents/${type}/${slug}?access_token=${token}`;
                             const apiRes = await BnfLogin.httpRequest({
                                 url: apiUrl,
                                 method: 'GET',
@@ -213,7 +219,9 @@
         const isLoginPage = !!(oclcUsernameInput && oclcPasswordInput)
             || !!oclcLoginForm
             || pageDocTitle === 'login'
-            || pageDocTitle === 'authentication required';
+            || pageDocTitle === 'authentication required'
+            || pageDocTitle === 'shibboleth authentication request'
+            || !!doc.querySelector('form[action*="SAML2/POST/SSO"]');
 
         console.log('[BnF Proxy] Login page check — title:', doc.title, '| isLoginPage:', isLoginPage);
 

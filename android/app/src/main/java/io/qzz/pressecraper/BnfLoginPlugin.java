@@ -317,6 +317,7 @@ public class BnfLoginPlugin extends Plugin {
             try {
                 URL url = new URL(urlStr);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setInstanceFollowRedirects(false);
                 conn.setRequestMethod(method.toUpperCase());
                 conn.setConnectTimeout(30000);
                 conn.setReadTimeout(30000);
@@ -414,6 +415,7 @@ public class BnfLoginPlugin extends Plugin {
                     }
 
                     conn = (HttpURLConnection) next.openConnection();
+                    conn.setInstanceFollowRedirects(false);
                     conn.setRequestMethod("GET"); // POST redirects are followed as GET
                     conn.setConnectTimeout(30000);
                     conn.setReadTimeout(30000);
