@@ -13,6 +13,87 @@
     // UA de secours utilisé si le plugin natif n'est pas disponible (tests navigateur)
     const UA_FALLBACK = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 
+    // ===== BPC STATE & CONFIG =====
+    let bpcSites = null;
+    let bpcScript = null;
+    let bpcScriptFr = null;
+    let bpcPurify = null;
+
+    /**
+     * Initialise le framework BPC en chargeant sites.js, contentScript.js, contentScript_fr.js et purify.min.js
+     * (depuis le cache localStorage mis à jour, ou en fallback depuis les assets locaux).
+     */
+    async function initBpc() {
+        try {
+            console.log('[BPC] Initializing rules...');
+            
+            // 1. Charger sites.js
+            let sitesData = localStorage.getItem('bpc_sites_js');
+            if (!sitesData) {
+                const res = await fetch('js/bpc/sites.js');
+                sitesData = await res.text();
+            }
+            
+            // Evaluer sites.js dans un contexte isolé pour obtenir defaultSites
+            // sites.js fait référence à chrome/browser à la fin du fichier, nous passons des stubs
+            const evalSites = new Function('chrome', 'browser', sitesData + '; return defaultSites;');
+            const chromeStub = { runtime: { getManifest: () => ({ key: 'dummy' }) } };
+            bpcSites = evalSites(chromeStub, chromeStub);
+            console.log('[BPC] Sites loaded. Domains count:', Object.keys(bpcSites).length);
+
+            // 2. Charger contentScript.js (générique)
+            bpcScript = localStorage.getItem('bpc_script_js');
+            if (!bpcScript) {
+                const res = await fetch('js/bpc/contentScript.js');
+                bpcScript = await res.text();
+            }
+            console.log('[BPC] contentScript.js loaded. Length:', bpcScript.length);
+
+            // 3. Charger contentScript_fr.js
+            bpcScriptFr = localStorage.getItem('bpc_script_fr_js');
+            if (!bpcScriptFr) {
+                const res = await fetch('js/bpc/contentScript_fr.js');
+                bpcScriptFr = await res.text();
+            }
+            console.log('[BPC] contentScript_fr.js loaded. Length:', bpcScriptFr.length);
+
+            // 4. Charger purify.min.js
+            const purifyRes = await fetch('js/bpc/purify.min.js');
+            bpcPurify = await purifyRes.text();
+            console.log('[BPC] purify.min.js loaded. Length:', bpcPurify.length);
+        } catch (e) {
+            console.error('[BPC] Failed to initialize BPC framework:', e);
+        }
+    }
+
+    // Lancement automatique à l'import
+    initBpc().catch(e => console.error('[BPC] Auto-init failed:', e));
+
+    /**
+     * Recherche la configuration BPC pour un hostname donné.
+     */
+    function findBpcSiteConfig(hostname) {
+        if (!bpcSites) return null;
+        for (const key in bpcSites) {
+            const site = bpcSites[key];
+            if (!site || (!site.domain && !site.group)) continue;
+            
+            // Si c'est un domaine direct
+            if (site.domain && (hostname === site.domain || hostname.endsWith('.' + site.domain))) {
+                return { name: key, ...site };
+            }
+            // Si c'est un groupe de domaines
+            if (site.group && Array.isArray(site.group)) {
+                for (const domain of site.group) {
+                    if (hostname === domain || hostname.endsWith('.' + domain)) {
+                        return { name: key, ...site, domain: domain };
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     /**
      * Récupère le User-Agent réel de la WebView Android via le plugin natif.
      * Retourne le UA de secours si le plugin n'est pas disponible.
@@ -39,18 +120,44 @@
         if (!title) return null;
 
         let cleanTitle = title.split(/ - | \| | — | · /)[0];
-        // On supprime les apostrophes pour que "c'est" -> "cest", "l'info" -> "linfo"
-        cleanTitle = cleanTitle.replace(/[''""’‘`]/g, '');
+        // Remplacer les apostrophes par des espaces plutôt que de les supprimer directement
+        cleanTitle = cleanTitle.replace(/[''""’‘`]/g, ' ');
         cleanTitle = cleanTitle.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()…?–—«»]/g, ' ');
 
         const words = cleanTitle.toLowerCase().split(/\s+/).filter(Boolean);
         const filtered = [];
         const seen = new Set();
 
+        const frenchStopwords = new Set([
+            // Articles & Déterminants
+            'le', 'la', 'les', 'un', 'une', 'des', 'du', 'de', 'en', 'et', 'au', 'aux',
+            'ce', 'ces', 'cette', 'cet', 'mon', 'ton', 'son', 'ma', 'ta', 'sa', 'mes', 'tes', 'ses',
+            'nos', 'vos', 'notre', 'votre', 'leur', 'leurs',
+            // Pronoms
+            'je', 'tu', 'il', 'elle', 'on', 'nous', 'vous', 'ils', 'elles',
+            'me', 'te', 'se', 'y', 'moi', 'toi', 'soi', 'lui',
+            'celui', 'celle', 'ceux', 'celles',
+            'qui', 'que', 'quoi', 'dont', 'ou', 'où',
+            'lequel', 'laquelle', 'lesquels', 'lesquelles',
+            'quel', 'quelle', 'quels', 'quelles',
+            // Conjonctions & Prépositions
+            'et', 'mais', 'donc', 'or', 'ni', 'car', 'si',
+            'par', 'sur', 'dans', 'avec', 'sans', 'sous', 'pour', 'chez', 'vers',
+            'depuis', 'pendant', 'devant', 'derrière', 'avant', 'après',
+            'entre', 'comme', 'quand', 'pourquoi', 'comment',
+            // Auxiliaires & Verbes communs
+            'est', 'ont', 'sont', 'suis', 'es', 'sommes', 'êtes',
+            'ai', 'as', 'avez', 'avons', 'aura', 'auront', 'sera', 'seront',
+            'était', 'étaient', 'avait', 'avaient', 'avoir', 'être', 'fait', 'faire',
+            // Adverbes & divers
+            'ne', 'pas', 'plus', 'bien', 'ici', 'tout', 'tous', 'toute', 'toutes',
+            'autre', 'autres', 'même', 'mêmes', 'qu'
+        ]);
+
         for (const raw of words) {
-            const cw = raw.replace(/[^\p{L}\d]/gu, '');
-            // On exclut uniquement les lettres isolées de 1 caractère car non-indexées par Europresse
-            if (!cw || cw.length <= 1) continue;
+            let cw = raw.replace(/[^\p{L}\d]/gu, '');
+            if (!cw || cw.length <= 1 || frenchStopwords.has(cw)) continue;
+
             if (!seen.has(cw)) {
                 seen.add(cw);
                 filtered.push(cw);
@@ -58,6 +165,7 @@
         }
 
         if (filtered.length < 1) return null;
+
         return filtered.join(' ');
     }
 
@@ -142,6 +250,37 @@
         const UA = await getUA(); // UA dynamique depuis la WebView système
 
         const isUrl = titleOrUrl.startsWith('http');
+        
+        // ==========================================
+        // === INTERCEPTION BYPASS PAYWALLS (BPC) ===
+        // ==========================================
+        if (isUrl && state.directScrapingEnabled !== false) {
+            try {
+                const urlObj = new URL(titleOrUrl);
+                const hostname = urlObj.hostname;
+                const bpcConfig = findBpcSiteConfig(hostname);
+                
+                if (bpcConfig) {
+                    console.log('[BPC] Direct scraping match found for:', hostname, '| Rule:', bpcConfig.name);
+                    onProgress('Bypass Direct', `Bypass direct actif pour ${bpcConfig.name}...`, 10);
+                    
+                    // Lancer la logique de bypass direct
+                    const scrapedDirect = await runBpcDirectScraping(titleOrUrl, bpcConfig, UA, onProgress);
+                    if (scrapedDirect) {
+                        onProgress('Bypass Direct', 'Bypass direct réussi !', 90);
+                        return scrapedDirect;
+                    }
+                }
+            } catch (bpcError) {
+                console.warn('[BPC] Direct bypass failed, falling back to Europresse:', bpcError);
+            }
+        }
+        
+        // Si Europresse n'est pas configuré, on ne tente pas d'y accéder et on s'arrête
+        if (!state.bnfUsername || !state.bnfPassword) {
+            throw new Error("Le contournement direct a échoué (ou n'est pas supporté pour ce site) et Europresse n'est pas configuré.");
+        }
+
         let articleTitle = '';
         let publishedDate = '';
         let articleUrl = isUrl ? titleOrUrl : '';
@@ -357,7 +496,598 @@
         };
     }
 
+    /**
+     * Effectue le scraping direct et applique le bypass BPC via un DOM virtuel (Iframe).
+     */
+    async function runBpcDirectScraping(articleUrl, siteConfig, defaultUA, onProgress) {
+        const BnfLogin = window.Capacitor.Plugins.BnfLogin;
+        
+        // 1. Détermination du User-Agent
+        let customUA = defaultUA;
+        if (siteConfig.useragent === 'googlebot') {
+            customUA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+        } else if (siteConfig.useragent === 'bingbot') {
+            customUA = 'Mozilla/5.0 (compatible; Bingbot/2.0; +http://www.bing.com/bingbot.htm)';
+        } else if (siteConfig.useragent === 'facebookbot') {
+            customUA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_voiced.html)';
+        } else if (siteConfig.useragent_custom) {
+            customUA = siteConfig.useragent_custom;
+        }
+
+        // 2. Préparation des headers de requête
+        const headers = {
+            'User-Agent': customUA,
+            'Referer': 'https://www.google.com/' // Moteur de recherche comme Referer par défaut
+        };
+
+        onProgress('Bypass Direct', 'Téléchargement de la page...', 20);
+        
+        // 3. Téléchargement du HTML original
+        let pageRes;
+        if (BnfLogin) {
+            pageRes = await BnfLogin.httpRequest({
+                url: articleUrl,
+                method: 'GET',
+                headers: headers
+            });
+        } else {
+            const r = await fetch(articleUrl, { headers: headers });
+            pageRes = { status: r.status, data: await r.text() };
+        }
+
+        if (!pageRes || pageRes.status !== 200 || !pageRes.data) {
+            throw new Error(`HTTP error ${pageRes?.status || 'unknown'} during direct fetch`);
+        }
+
+        onProgress('Bypass Direct', 'Exécution des règles de bypass...', 40);
+
+        // 4. Création de l'Iframe sandboxé pour exécuter le bypass
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+
+        const iframeWindow = iframe.contentWindow;
+        const iframeDocument = iframe.contentDocument;
+
+        // Neutraliser les scripts exécutables de la page d'origine pour éviter tout crash de document.write
+        // et interférence, tout en gardant les balises JSON/JSON-LD contenant les données d'article.
+        let sanitizedHtml = pageRes.data.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (match, attrs, content) => {
+            if (attrs.includes('application/ld+json') || attrs.includes('application/json')) {
+                return match;
+            }
+            return `<script type="disabled-javascript" ${attrs.replace(/\bsrc=/gi, 'data-src=')}>/* disabled */</script>`;
+        });
+
+        // Écrire le HTML original dans l'Iframe pour recréer le DOM
+        iframeDocument.open();
+        iframeDocument.write(sanitizedHtml);
+        iframeDocument.close();
+
+        // 5. Configurer l'environnement de l'Iframe (BpcBridge)
+        const urlObj = new URL(articleUrl);
+        const articleDomain = urlObj.hostname;
+        const articlePathname = urlObj.pathname;
+        const articleOrigin = urlObj.origin;
+
+        // Mock window.location, document and window with proxies to bypass configurable=false restrictions
+        const locationProxy = new Proxy(iframeWindow.location, {
+            get(target, prop) {
+                if (prop === 'hostname') return articleDomain;
+                if (prop === 'href') return articleUrl;
+                if (prop === 'pathname') return articlePathname;
+                if (prop === 'origin') return articleOrigin;
+                const val = target[prop];
+                if (typeof val === 'function') return val.bind(target);
+                return val;
+            }
+        });
+
+        const documentProxy = new Proxy(iframeDocument, {
+            get(target, prop) {
+                if (prop === 'location') return locationProxy;
+                if (prop === 'referrer') return 'https://www.google.com/';
+                const val = target[prop];
+                if (typeof val === 'function') return val.bind(target);
+                return val;
+            }
+        });
+
+        const windowProxy = new Proxy(iframeWindow, {
+            get(target, prop) {
+                if (prop === 'location') return locationProxy;
+                if (prop === 'document') return documentProxy;
+                if (prop === 'window' || prop === 'self' || prop === 'globalThis') return windowProxy;
+                const val = target[prop];
+                if (typeof val === 'function') return val.bind(target);
+                return val;
+            }
+        });
+
+        // Attach proxies to iframe window for the IIFE boostrap wrapper
+        iframeWindow.__windowProxy__ = windowProxy;
+        iframeWindow.__documentProxy__ = documentProxy;
+        iframeWindow.__locationProxy__ = locationProxy;
+
+        // Stubs de l'API Chrome Extension
+        iframeWindow.chrome = { runtime: { sendMessage: () => {}, getManifest: () => ({ version: '1.0.0' }) } };
+        iframeWindow.browser = iframeWindow.chrome;
+        iframeWindow.ext_api = iframeWindow.chrome;
+        iframeWindow.ext_chromium = true;
+        iframeWindow.mobile = true;
+        iframeWindow.dompurify_loaded = true;
+        iframeWindow.dompurify_options = {
+            ADD_TAGS: ['amp-img', 'embed', 'iframe', 'list'],
+            ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'itemprop', 'layout', 'target']
+        };
+
+        // Fonctions d'émulation BPC
+        iframeWindow.matchDomain = function(domains, hostname = articleDomain) {
+            if (typeof domains === 'string') domains = [domains];
+            return domains.find(domain => hostname === domain || hostname.endsWith('.' + domain)) || false;
+        };
+
+        iframeWindow.removeDOMElement = function(...elements) {
+            for (let element of elements) {
+                if (element) element.remove();
+            }
+        };
+
+        iframeWindow.hideDOMElement = function(...elements) {
+            for (let element of elements) {
+                if (element) element.style = 'display:none !important;';
+            }
+        };
+
+        iframeWindow.hideDOMStyle = function(selector, id = 1) {
+            let style = iframeDocument.querySelector('head > style#ext'+ id);
+            if (!style && iframeDocument.head) {
+                let sheet = iframeDocument.createElement('style');
+                sheet.id = 'ext' + id;
+                sheet.innerText = selector + ' {display: none !important;}';
+                iframeDocument.head.appendChild(sheet);
+            }
+        };
+
+        iframeWindow.addStyle = function(css, id = 1) {
+            let style = iframeDocument.querySelector('head > style#add'+ id);
+            if (!style && iframeDocument.head) {
+                let sheet = iframeDocument.createElement('style');
+                sheet.id = 'add' + id;
+                sheet.innerText = css;
+                iframeDocument.head.appendChild(sheet);
+            }
+        };
+
+        iframeWindow.matchKeyJson = function(key, keys) {
+            let match = false;
+            if (typeof keys === 'string') match = (key === keys);
+            else if (Array.isArray(keys)) match = keys.includes(key);
+            else if (keys instanceof RegExp) match = keys.test(key);
+            return match;
+        };
+
+        iframeWindow.findKeyJson = function(json, keys, min_val_len = 0) {
+            let source = '';
+            if (Array.isArray(json)) {
+                for (let elem of json)
+                    source = source || iframeWindow.findKeyJson(elem, keys, min_val_len);
+            } else if (typeof json === 'object') {
+                for (let elem in json) {
+                    let json_elem = json[elem];
+                    if (typeof json_elem === 'string' && iframeWindow.matchKeyJson(elem, keys)) {
+                        if (json_elem.length > min_val_len) return json_elem;
+                    } else if (Array.isArray(json_elem) && json_elem.length > 1 && iframeWindow.matchKeyJson(elem, keys)) {
+                        return json_elem;
+                    } else {
+                        source = source || iframeWindow.findKeyJson(json_elem, keys, min_val_len);
+                    }
+                }
+            }
+            return source;
+        };
+
+        iframeWindow.getNestedKeys = function(obj, key) {
+            if (key in obj) return obj[key];
+            let keys = key.split('.');
+            let value = obj;
+            for (let i = 0; i < keys.length; i++) {
+                value = value[keys[i]];
+                if (value === undefined) break;
+            }
+            return value;
+        };
+
+        iframeWindow.makeFigure = function(url, caption_text, img_attrib = {}, caption_attrib = {}) {
+            let elem = iframeDocument.createElement('figure');
+            let img = iframeDocument.createElement('img');
+            img.src = url;
+            for (let attrib in img_attrib) {
+                if (img_attrib[attrib]) img.setAttribute(attrib, img_attrib[attrib]);
+            }
+            elem.appendChild(img);
+            if (caption_text) {
+                let caption = iframeDocument.createElement('figcaption');
+                for (let attrib in caption_attrib) {
+                    if (caption_attrib[attrib]) caption.setAttribute(attrib, caption_attrib[attrib]);
+                }
+                let cap_par = iframeDocument.createElement('p');
+                cap_par.innerText = caption_text;
+                caption.appendChild(cap_par);
+                elem.appendChild(caption);
+            }
+            return elem;
+        };
+
+        iframeWindow.makeLink = function(url, title, style = '') {
+            let a_link = iframeDocument.createElement('a');
+            a_link.href = url;
+            a_link.innerText = title;
+            if (style) a_link.style = style;
+            return a_link;
+        };
+
+        iframeWindow.clearPaywall = function(paywall, paywall_action) {
+            if (paywall) {
+                if (!paywall_action) iframeWindow.removeDOMElement(...paywall);
+                else {
+                    for (let elem of paywall) {
+                        if (paywall_action.rm_class) elem.classList.remove(paywall_action.rm_class);
+                        else if (paywall_action.rm_attrib) elem.removeAttribute(paywall_action.rm_attrib);
+                    }
+                }
+            }
+        };
+
+        iframeWindow.randomInt = function(max) {
+            return Math.floor(Math.random() * Math.floor(max));
+        };
+
+        iframeWindow.parseHtmlEntities = function(encodedString) {
+            let parser = new DOMParser();
+            let doc = parser.parseFromString('<textarea>' + encodedString + '</textarea>', 'text/html');
+            let dom = doc.querySelector('textarea');
+            return dom.value;
+        };
+
+        iframeWindow.breakText = function(str, headers = false) {
+            str = str.replace(/(?:^|[A-Za-z\"\“\”\)])(\.+|\?|!)(?=[A-ZÖÜ\„\”\d][A-Za-zÀ-ÿ\„\d]{1,})/gm, "$&\n\n");
+            if (headers)
+                str = str.replace(/(([a-z]{2,}|[\"\“]))(?=[A-Z](?=[A-Za-z\u00C0-\u00FF]+))/gm, "$&\n\n");
+            return str;
+        };
+
+        iframeWindow.decode_utf8 = function(str) {
+            return decodeURIComponent(escape(str));
+        };
+
+        iframeWindow.getArticleJsonScript = function() {
+            let scripts = iframeDocument.querySelectorAll('script[type="application/ld+json"]');
+            return Array.prototype.find.call(scripts, s => s.text.includes('"articleBody"') || s.text.includes('"articlebody"'));
+        };
+
+        iframeWindow.getSourceJsonScript = function(filter, attributes = ':not([src], [type])') {
+            let scripts = iframeDocument.querySelectorAll('script' + attributes);
+            return Array.prototype.find.call(scripts, s => filter.test(s.text));
+        };
+
+        iframeWindow.archiveRandomDomain = function() {
+            const domains = ['archive.ph', 'archive.is', 'archive.li', 'archive.today', 'archive.md', 'archive.vn'];
+            return domains[Math.floor(Math.random() * domains.length)];
+        };
+
+        iframeWindow.archiveLink = function(url, text_fail = 'BPC > Try for full article text:\r\n') {
+            let a_link = iframeDocument.createElement('a');
+            a_link.href = 'https://' + iframeWindow.archiveRandomDomain() + '/' + url;
+            a_link.innerText = text_fail + a_link.href;
+            a_link.target = '_blank';
+            a_link.style = 'color: red; font-weight: bold;';
+            return a_link;
+        };
+
+        iframeWindow.archiveLink_renew = function(url, text_fail = 'BPC > Renew if incomplete:\r\n') {
+            return iframeWindow.archiveLink(url, text_fail);
+        };
+
+        iframeWindow.getSelectorLevel = function(selector) {
+            if (selector.replace(/,\s+/g, ',').match(/[>\s]+/) && !selector.includes(':has(>'))
+                selector = selector.replace(/,\s+/g, ',').split(',').map(x => x.match(/[>\s]+/) ? x + ', ' + x.split(/[>\s]+/).pop() : x).join(', ');
+            return selector;
+        };
+
+        iframeWindow.header_nofix = function() {};
+        iframeWindow.blockJsReferrer = function() {};
+        iframeWindow.refreshCurrentTab = function() {};
+        iframeWindow.refreshCurrentTab_bg = function() {};
+
+        // Fonctions réseau asynchrones
+        iframeWindow.data_ext_fetch_id = 0;
+        iframeWindow.data_ext_fetch = [];
+
+        iframeWindow.getExtFetch = async function(url, json_key = '', options = {}, callback, data_ext_fetch_id = 0, args = []) {
+            try {
+                console.log('[BPC BRIDGE] getExtFetch:', url);
+                const BnfLogin = window.parent.Capacitor?.Plugins?.BnfLogin || window.Capacitor?.Plugins?.BnfLogin;
+                
+                let res;
+                const reqHeaders = options.headers || {};
+                reqHeaders['User-Agent'] = customUA;
+                
+                if (BnfLogin) {
+                    res = await BnfLogin.httpRequest({
+                        url: url,
+                        method: options.method || 'GET',
+                        headers: reqHeaders,
+                        body: options.body || null
+                    });
+                } else {
+                    const r = await fetch(url, { method: options.method || 'GET', headers: reqHeaders, body: options.body || null });
+                    res = { status: r.status, data: await r.text() };
+                }
+                
+                if (res && (res.status === 200 || res.status === 201)) {
+                    let responseData = res.data;
+                    if (json_key) {
+                        try {
+                            const parsed = JSON.parse(res.data);
+                            responseData = iframeWindow.getNestedKeys(parsed, json_key);
+                        } catch (e) {
+                            console.warn('[BPC BRIDGE] JSON extract error:', e);
+                        }
+                    }
+                    if (callback) callback(url, responseData, ...args);
+                } else {
+                    if (callback) callback(url, null, ...args);
+                }
+            } catch (e) {
+                console.error('[BPC BRIDGE] getExtFetch error:', e);
+                if (callback) callback(url, null, ...args);
+            }
+        };
+
+        iframeWindow.replaceDomElementExt = async function(url, proxy, base64, selector, text_fail = '', selector_source = selector, selector_archive = selector) {
+            try {
+                console.log('[BPC BRIDGE] replaceDomElementExt:', url);
+                const BnfLogin = window.parent.Capacitor?.Plugins?.BnfLogin || window.Capacitor?.Plugins?.BnfLogin;
+                
+                let res;
+                if (BnfLogin) {
+                    res = await BnfLogin.httpRequest({
+                        url: url,
+                        method: 'GET',
+                        headers: { 'User-Agent': customUA }
+                    });
+                } else {
+                    const r = await fetch(url);
+                    res = { status: r.status, data: await r.text() };
+                }
+                
+                if (res && res.status === 200 && res.data) {
+                    let html = res.data;
+                    if (base64) {
+                        html = iframeWindow.decode_utf8(atob(html));
+                        selector_source = 'body';
+                    }
+                    
+                    let sanitizedHtml = html;
+                    if (iframeWindow.DOMPurify) {
+                        sanitizedHtml = iframeWindow.DOMPurify.sanitize(html, iframeWindow.dompurify_options);
+                    }
+                    
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(sanitizedHtml, 'text/html');
+                    
+                    if (iframeWindow.selector_level) {
+                        selector_source = iframeWindow.getSelectorLevel(selector_source);
+                    }
+                    
+                    const articleNew = doc.querySelector(selector_source);
+                    const article = iframeDocument.querySelector(selector);
+                    
+                    if (articleNew && article) {
+                        article.parentNode.replaceChild(articleNew, article);
+                        if (typeof iframeWindow.func_post === 'function') {
+                            iframeWindow.func_post();
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('[BPC BRIDGE] replaceDomElementExt error:', e);
+            }
+        };
+
+        iframeWindow.getArchive = function(url, paywall_sel, paywall_action = '', selector, text_fail = '', selector_source = selector, selector_archive = selector) {
+            let url_archive = 'https://' + iframeWindow.archiveRandomDomain() + '/' + (url.includes('/#/') ? encodeURIComponent(url.split('?')[0]) : url.split(/[#\?]/)[0]);
+            let paywall = iframeDocument.querySelectorAll(paywall_sel);
+            if (paywall.length && iframeWindow.dompurify_loaded) {
+                iframeWindow.clearPaywall(paywall, paywall_action);
+                iframeWindow.csDoneOnce = true;
+                iframeWindow.replaceDomElementExt(url_archive, true, false, selector, text_fail, selector_source, selector_archive);
+            }
+        };
+
+        // Redirection de fetch global dans l'Iframe
+        iframeWindow.fetch = async function(resource, init) {
+            let url = (typeof resource === 'string') ? resource : resource.url;
+            console.log('[BPC BRIDGE] fetch override intercepted:', url);
+            
+            if (url.startsWith('http') && !url.includes(iframeWindow.location.host)) {
+                const BnfLogin = window.parent.Capacitor?.Plugins?.BnfLogin || window.Capacitor?.Plugins?.BnfLogin;
+                if (BnfLogin) {
+                    try {
+                        let headers = {};
+                        if (init && init.headers) {
+                            if (init.headers instanceof Headers) {
+                                init.headers.forEach((value, key) => { headers[key] = value; });
+                            } else if (typeof init.headers === 'object') {
+                                headers = init.headers;
+                            }
+                        }
+                        headers['User-Agent'] = customUA;
+                        
+                        let body = null;
+                        if (init && init.body) body = init.body;
+                        
+                        const res = await BnfLogin.httpRequest({
+                            url: url,
+                            method: (init && init.method) || 'GET',
+                            headers: headers,
+                            body: body
+                        });
+                        
+                        return {
+                            ok: res.status >= 200 && res.status < 300,
+                            status: res.status,
+                            statusText: 'OK',
+                            text: async () => res.data,
+                            json: async () => JSON.parse(res.data)
+                        };
+                    } catch (e) {
+                        console.error('[BPC BRIDGE] Fetch redirect failed:', e);
+                        throw e;
+                    }
+                }
+            }
+            return window.parent.fetch(resource, init);
+        };
+
+        // 6. Injection de DOMPurify et exécution du contentScript dans l'IIFE avec nos proxies
+        iframeWindow.DOMPurify = {
+            sanitize: (x, y = '') => x,
+            removed: []
+        };
+
+        const bootstrapScript = iframeDocument.createElement('script');
+        bootstrapScript.text = `
+            (function(window, self, globalThis, document, location) {
+                // Déclarer les variables d'état BPC attendues par le content script
+                window.csDone = false;
+                window.csDoneOnce = false;
+                try {
+                    // 1. Charger le contentScript générique (framework de helpers)
+                    ${bpcScript}
+                    
+                    // 2. Charger le contentScript localisé (règles fr)
+                    ${bpcScriptFr}
+                    
+                    // Exécuter le bypass
+                    if (typeof cs_default === "function") {
+                        console.log("[BPC BRIDGE] Running cs_default() inside sandboxed IIFE...");
+                        cs_default();
+                    } else {
+                        console.warn("[BPC BRIDGE] cs_default function not found");
+                    }
+                } catch (e) {
+                    console.error("[BPC BRIDGE] Error inside IIFE execution:", e);
+                }
+            })(window.__windowProxy__, window.__windowProxy__, window.__windowProxy__, window.__documentProxy__, window.__locationProxy__);
+        `;
+        iframeDocument.head.appendChild(bootstrapScript);
+
+        // 7. Attente active de la résolution du bypass
+        onProgress('Bypass Direct', 'Déverrouillage de l\'article...', 60);
+
+        const startTime = Date.now();
+        const checkInterval = 100;
+        const maxWaitTime = 2500;
+
+        await new Promise((resolve) => {
+            const timer = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                let bypassSuccess = false;
+                
+                if (articleDomain === 'lemonde.fr') {
+                    const hasParagraphs = iframeDocument.querySelectorAll('.article__paragraph').length >= 3;
+                    const paywallGone = !iframeDocument.querySelector('section.lmd-paywall');
+                    if (hasParagraphs && paywallGone) bypassSuccess = true;
+                } else if (articleDomain === 'lefigaro.fr') {
+                    const hasParagraphs = iframeDocument.querySelectorAll('.fig-paragraph').length >= 3;
+                    const paywallGone = !iframeDocument.querySelector('div#fig-premium-paywall');
+                    if (hasParagraphs && paywallGone) bypassSuccess = true;
+                } else if (articleDomain === 'leparisien.fr') {
+                    const leftSection = iframeDocument.querySelector('section#left');
+                    const paywallGone = !iframeDocument.querySelector('div.paywall');
+                    if (leftSection && leftSection.textContent.length > 800 && paywallGone) bypassSuccess = true;
+                } else {
+                    // Règle générique
+                    const paywalls = iframeDocument.querySelectorAll('div[class*="paywall"], section[class*="paywall"], div[id*="paywall"]');
+                    const textLength = iframeDocument.body.textContent.length;
+                    if (paywalls.length === 0 && textLength > 1200) bypassSuccess = true;
+                }
+                
+                if (bypassSuccess || elapsed >= maxWaitTime) {
+                    clearInterval(timer);
+                    resolve();
+                }
+            }, checkInterval);
+        });
+
+        // 8. Extraction du contenu et validation
+        onProgress('Bypass Direct', 'Extraction du texte...', 80);
+
+        // Détection de l'élément de contenu d'article
+        let contentSelector = '';
+        if (articleDomain.includes('lemonde.fr')) contentSelector = '.article__content';
+        else if (articleDomain.includes('lefigaro.fr')) contentSelector = 'div[data-component="fig-content-body"]';
+        else if (articleDomain.includes('leparisien.fr')) contentSelector = 'section#left';
+        else if (articleDomain.includes('liberation.fr')) contentSelector = '.article-body, .article__content';
+        else if (articleDomain.includes('lepoint.fr')) contentSelector = '.article-content, .article-body';
+        else if (articleDomain.includes('marianne.net')) contentSelector = '.article-body';
+        else if (articleDomain.includes('mediapart.fr')) contentSelector = '.content-article';
+        else if (articleDomain.includes('la-croix.com')) contentSelector = '.article-body';
+        else if (articleDomain.includes('lesoir.be')) contentSelector = '.r-content, article.r-article';
+        
+        let contentEl = null;
+        if (contentSelector) {
+            contentEl = iframeDocument.querySelector(contentSelector);
+        }
+        if (!contentEl) {
+            contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article') || iframeDocument.body;
+        }
+
+        // Validation simple : si l'élément de paywall existe encore ou si le texte est trop court
+        const paywallSelector = 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget';
+        const hasPaywall = iframeDocument.querySelector(paywallSelector);
+        const textLength = contentEl ? contentEl.textContent.trim().length : 0;
+
+        console.log('[BPC] Validation - text length:', textLength, 'has paywall:', !!hasPaywall);
+
+        if (hasPaywall && textLength < 800) {
+            iframe.remove();
+            throw new Error("Direct bypass resulted in paywall still active or insufficient text.");
+        }
+
+        // Récupération des métadonnées
+        const pageTitle = iframeDocument.querySelector('meta[property="og:title"]')?.getAttribute('content')
+            || iframeDocument.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
+            || iframeDocument.title || 'Article direct';
+
+        const sourceName = siteConfig.name.split(' (')[0].split(' (+')[0];
+
+        // Formatage final avec CSS d'impression
+        const PRINT_CSS = `
+            @page { margin: 15mm 20mm; size: A4; }
+            @media print {
+                body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000; background: #fff; padding: 0; margin: 0; }
+                h1 { font-size: 18pt; font-weight: bold; margin-bottom: 12pt; line-height: 1.3; border-bottom: 1px solid #ccc; padding-bottom: 8pt; page-break-after: avoid; }
+                p, li, blockquote, figure { page-break-inside: avoid; orphans: 3; widows: 3; }
+                img { max-width: 100%; page-break-inside: avoid; }
+                a::after { content: ""; }
+            }
+        `;
+
+        const finalHtml = `<style>${PRINT_CSS}</style><h1>${pageTitle}</h1>${contentEl.innerHTML}`;
+
+        iframe.remove();
+
+        return {
+            html: finalHtml,
+            title: pageTitle,
+            source: sourceName,
+            url: articleUrl
+        };
+    }
+
     // Exposition globale
-    global.Scraper = { scrapeArticle };
+    global.Scraper = { scrapeArticle, initBpc };
 
 })(window);

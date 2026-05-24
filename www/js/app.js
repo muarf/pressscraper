@@ -21,7 +21,10 @@
         history: [],
         currentArticleId: null,
         sharedText: null,
-        lastActiveScreen: 'homeScreen'
+        directScrapingEnabled: true,
+        bpcRulesUpdated: false,
+        bpcLastUpdated: '',
+        onboardingSkipped: false
     };
 
     // ===== PERSISTANCE =====
@@ -43,6 +46,10 @@
             bnfCookies: state.bnfCookies,
             bnfCookiesHeader: state.bnfCookiesHeader,
             bnfCookiesExpiry: state.bnfCookiesExpiry,
+            directScrapingEnabled: state.directScrapingEnabled !== false,
+            bpcRulesUpdated: state.bpcRulesUpdated || false,
+            bpcLastUpdated: state.bpcLastUpdated || '',
+            onboardingSkipped: state.onboardingSkipped || false,
             history: state.history.map(h => ({
                 id: h.id, title: h.title, url: h.url,
                 source: h.source || h.site_source || '', date: h.date
@@ -112,7 +119,7 @@
         }
 
         // 3. Décider quel écran afficher
-        if (!state.bnfUsername || !state.bnfPassword || !state.bnfCookies) {
+        if ((!state.bnfUsername || !state.bnfPassword) && !state.onboardingSkipped) {
             showOnboarding();
         } else {
             showMainApp();
@@ -194,6 +201,12 @@
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-key"></i> Se connecter';
         }
+    };
+
+    window.skipOnboarding = function() {
+        state.onboardingSkipped = true;
+        save();
+        showMainApp();
     };
 
     // ===== ACCÈS NATIF =====
@@ -295,84 +308,108 @@
         actions.style.display = 'none';
         openBtn.style.display = 'none';
 
+        let sessionRetry = false;
         try {
-            // Renouvellement automatique de session si expirée
-            if (!areCookiesValid() && state.bnfUsername && state.bnfPassword) {
-                titleEl.textContent = 'Renouvellement de la session BnF...';
-                fill.style.width = '8%';
-                try {
-                    const result = await nativeLogin(state.bnfUsername, state.bnfPassword);
-                    if (result.success && result.cookies) {
-                        state.bnfCookies = result.cookies;
-                        state.bnfCookiesHeader = result.cookieHeader || '';
-                        state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
-                        save();
-                    } else {
-                        throw new Error(result.error || 'Reconnexion BnF échouée');
+            while (true) {
+                // Renouvellement automatique de session si expirée localement
+                if (!areCookiesValid() && state.bnfUsername && state.bnfPassword) {
+                    titleEl.textContent = 'Renouvellement de la session BnF...';
+                    fill.style.width = '8%';
+                    try {
+                        const result = await nativeLogin(state.bnfUsername, state.bnfPassword);
+                        if (result.success && result.cookies) {
+                            state.bnfCookies = result.cookies;
+                            state.bnfCookiesHeader = result.cookieHeader || '';
+                            state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
+                            save();
+                        } else {
+                            throw new Error(result.error || 'Reconnexion BnF échouée');
+                        }
+                    } catch(e) {
+                        throw new Error('Session BnF invalide: ' + e.message + '. Reconnectez-vous dans Paramètres.');
                     }
-                } catch(e) {
-                    throw new Error('Session BnF invalide: ' + e.message + '. Reconnectez-vous dans Paramètres.');
                 }
-            }
-            updateCookieStatusUI();
+                updateCookieStatusUI();
 
-            // Scraping via le module Scraper
-            const scraped = await window.Scraper.scrapeArticle(targetUrlOrQuery, fallbackTitle, state, updateStatusUI);
-
-            // Génération PDF
-            updateStatusUI('PDF', 'Génération du PDF local...', 90);
-
-            const articleId = 'art_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
-            const pdfFileName = articleId + '.pdf';
-            let pdfPath = '';
-
-            if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.BnfLogin) {
                 try {
-                    const pdfRes = await window.Capacitor.Plugins.BnfLogin.printHtmlToPdf({
-                        html: scraped.html,
-                        filename: pdfFileName
+                    // Scraping via le module Scraper
+                    const scraped = await window.Scraper.scrapeArticle(targetUrlOrQuery, fallbackTitle, state, updateStatusUI);
+
+                    // Génération PDF
+                    updateStatusUI('PDF', 'Génération du PDF local...', 90);
+
+                    const articleId = 'art_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+                    const pdfFileName = articleId + '.pdf';
+                    let pdfPath = '';
+
+                    if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.BnfLogin) {
+                        try {
+                            const pdfRes = await window.Capacitor.Plugins.BnfLogin.printHtmlToPdf({
+                                html: scraped.html,
+                                filename: pdfFileName
+                            });
+                            if (pdfRes.success && pdfRes.path) pdfPath = pdfRes.path;
+                        } catch(e) {
+                            console.warn('[PDF] Generation failed:', e);
+                        }
+                    }
+
+                    // Sauvegarde en IndexedDB
+                    const articleRecord = {
+                        id: articleId,
+                        url: scraped.url,
+                        title: scraped.title,
+                        html_content: scraped.html,
+                        pdf_path: pdfPath,
+                        site_source: scraped.source,
+                        date: new Date().toISOString()
+                    };
+
+                    await window.DB.saveArticleToDb(articleRecord);
+
+                    state.history.unshift({
+                        id: articleId, title: scraped.title, url: scraped.url,
+                        source: scraped.source, date: articleRecord.date
                     });
-                    if (pdfRes.success && pdfRes.path) pdfPath = pdfRes.path;
-                } catch(e) {
-                    console.warn('[PDF] Generation failed:', e);
+                    if (state.history.length > 100) state.history = state.history.slice(0, 100);
+                    save();
+
+                    // UI succès
+                    fill.style.width = '100%';
+                    card.className = 'status-card visible success';
+                    icon.className = 'fas fa-check-circle';
+                    titleEl.textContent = '✅ Article téléchargé !';
+                    sub.textContent = scraped.title;
+                    state.currentArticleId = articleId;
+                    actions.style.display = 'flex';
+                    openBtn.style.display = 'flex';
+
+                    resetScrapeBtn();
+                    toast('✅ Article sauvegardé localement !', 'success');
+                    showNativeNotification('📰 Article téléchargé', scraped.title, articleId);
+                    renderHistory();
+                    openArticleById(articleId);
+                    break; // Sortie de la boucle si tout a réussi
+                } catch(scrapeErr) {
+                    // Si la session BnF a expiré et qu'on n'a pas encore réessayé, on se reconnecte et on boucle
+                    if (scrapeErr.message && scrapeErr.message.includes('Session BnF expirée') && !sessionRetry && state.bnfUsername && state.bnfPassword) {
+                        console.log('[SCRAPE] Session expired during scrape. Retrying login...');
+                        titleEl.textContent = 'Session expirée, reconnexion BnF...';
+                        fill.style.width = '15%';
+                        
+                        const result = await nativeLogin(state.bnfUsername, state.bnfPassword);
+                        if (result.success && result.cookies) {
+                            state.bnfCookies = result.cookies;
+                            state.bnfCookiesHeader = result.cookieHeader || '';
+                            state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
+                            save();
+                            sessionRetry = true;
+                            continue; // Relancer le scraping
+                        }
+                    }
+                    throw scrapeErr; // Lancer l'erreur si c'est un autre problème ou si le retry a déjà été tenté
                 }
             }
-
-            // Sauvegarde en IndexedDB
-            const articleRecord = {
-                id: articleId,
-                url: scraped.url,
-                title: scraped.title,
-                html_content: scraped.html,
-                pdf_path: pdfPath,
-                site_source: scraped.source,
-                date: new Date().toISOString()
-            };
-
-            await window.DB.saveArticleToDb(articleRecord);
-
-            state.history.unshift({
-                id: articleId, title: scraped.title, url: scraped.url,
-                source: scraped.source, date: articleRecord.date
-            });
-            if (state.history.length > 100) state.history = state.history.slice(0, 100);
-            save();
-
-            // UI succès
-            fill.style.width = '100%';
-            card.className = 'status-card visible success';
-            icon.className = 'fas fa-check-circle';
-            titleEl.textContent = '✅ Article téléchargé !';
-            sub.textContent = scraped.title;
-            state.currentArticleId = articleId;
-            actions.style.display = 'flex';
-            openBtn.style.display = 'flex';
-
-            resetScrapeBtn();
-            toast('✅ Article sauvegardé localement !', 'success');
-            showNativeNotification('📰 Article téléchargé', scraped.title, articleId);
-            renderHistory();
-            openArticleById(articleId);
 
         } catch(e) {
             console.error('[SCRAPE] Error:', e);
@@ -443,27 +480,56 @@
         if (!articleId) return;
 
         const article = await window.DB.getArticleFromDb(articleId);
-        const articleTitle = article ? article.title : 'Article';
-        const articleUrl = article ? article.url : '';
+        if (!article) return;
+        const articleTitle = article.title || 'Article';
+        const articleUrl = article.url || '';
+
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = article.html_content || '';
+        tempDiv.querySelectorAll('style').forEach(s => s.remove());
+        const plainText = tempDiv.innerText || tempDiv.textContent || '';
+        const shareText = plainText || articleTitle;
 
         if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.Share) {
             try {
                 await window.Capacitor.Plugins.Share.share({
                     title: articleTitle,
-                    text: `Voici un article intéressant : ${articleTitle}`,
+                    text: shareText,
                     url: articleUrl,
                     dialogTitle: 'Partager l\'article'
                 });
             } catch(e) {}
         } else if (navigator.share) {
-            try { await navigator.share({ title: articleTitle, text: articleTitle, url: articleUrl }); } catch(e) {}
+            try { await navigator.share({ title: articleTitle, text: shareText, url: articleUrl }); } catch(e) {}
         } else {
             try {
+                await navigator.clipboard.writeText(shareText);
+                toast('Texte copié !', 'success');
+            } catch(e) {
+                // fallback
                 await navigator.clipboard.writeText(articleUrl);
                 toast('Lien copié !', 'success');
-            } catch(e) {
-                alert(`Lien : ${articleUrl}`);
             }
+        }
+    };
+
+    window.copyArticleText = async function() {
+        const articleId = state.currentArticleId;
+        if (!articleId) return;
+
+        try {
+            const article = await window.DB.getArticleFromDb(articleId);
+            if (!article) return;
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = article.html_content || '';
+            tempDiv.querySelectorAll('style').forEach(s => s.remove());
+            const plainText = tempDiv.innerText || tempDiv.textContent || '';
+
+            await navigator.clipboard.writeText(plainText);
+            toast('Article copié dans le presse-papiers !', 'success');
+        } catch(e) {
+            toast('Erreur lors de la copie : ' + e.message, 'error');
         }
     };
 
@@ -552,7 +618,80 @@
     function updateSettingsUI() {
         updateCookieStatusUI();
         document.getElementById('cacheCount').textContent = state.history.length;
+        
+        const toggle = document.getElementById('directScrapingToggle');
+        if (toggle) toggle.checked = (state.directScrapingEnabled !== false);
+        updateBpcStatusUI();
     }
+
+    function updateBpcStatusUI() {
+        const dot = document.getElementById('bpcRulesDot');
+        const text = document.getElementById('bpcRulesText');
+        if (!dot || !text) return;
+        if (state.bpcRulesUpdated) {
+            dot.className = 'dot ok';
+            let dateStr = '';
+            if (state.bpcLastUpdated) {
+                try {
+                    dateStr = ' (' + new Date(state.bpcLastUpdated).toLocaleDateString() + ')';
+                } catch(e) {}
+            }
+            text.textContent = 'Règles distantes actives' + dateStr;
+        } else {
+            dot.className = 'dot none';
+            text.textContent = 'Règles locales actives';
+        }
+    }
+
+    window.toggleDirectScraping = function(enabled) {
+        state.directScrapingEnabled = enabled;
+        save();
+    };
+
+
+    window.updateBpcRules = async function() {
+        const btn = document.getElementById('updateBpcBtn');
+        if (!btn) return;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mise à jour...';
+        toast('Mise à jour des règles BPC...', '');
+
+        try {
+            const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
+            
+            if (typeof window.Capacitor !== 'undefined' && BnfLogin && typeof BnfLogin.downloadAndExtractBpcRules === 'function') {
+                const res = await BnfLogin.downloadAndExtractBpcRules();
+                if (!res || !res.success) {
+                    throw new Error(res?.error || 'Erreur lors du téléchargement ou de l\'extraction');
+                }
+                
+                // Sauvegarde dans localStorage
+                localStorage.setItem('bpc_sites_js', res.sites_js);
+                localStorage.setItem('bpc_script_js', res.script_js);
+                localStorage.setItem('bpc_script_fr_js', res.script_fr_js);
+            } else {
+                throw new Error("La mise à jour des règles BPC nécessite d'être sur l'application mobile.");
+            }
+
+            state.bpcRulesUpdated = true;
+            state.bpcLastUpdated = new Date().toISOString();
+            save();
+
+            // Re-initialisation du scraper
+            if (window.Scraper && typeof window.Scraper.initBpc === 'function') {
+                await window.Scraper.initBpc();
+            }
+
+            updateBpcStatusUI();
+            toast('Règles BPC mises à jour !', 'success');
+        } catch(e) {
+            console.error('[BPC] Update failed:', e);
+            toast('Mise à jour échouée: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync"></i> Mettre à jour les règles';
+        }
+    };
 
     window.reconnectBnf = async function() {
         if (!state.bnfUsername || !state.bnfPassword) { showOnboarding(); return; }
@@ -580,6 +719,7 @@
         state.bnfCookiesExpiry = null;
         state.bnfUsername = '';
         state.bnfPassword = '';
+        state.onboardingSkipped = false;
         save();
 
         // Effacer les identifiants du stockage sécurisé natif

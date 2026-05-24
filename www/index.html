@@ -29,6 +29,9 @@
     <button class="btn-primary" id="onboardLoginBtn" onclick="onboardLogin()">
         <i class="fas fa-key"></i> Se connecter
     </button>
+    <button class="btn-secondary" id="onboardSkipBtn" onclick="skipOnboarding()">
+        Passer / Configurer plus tard
+    </button>
     <div class="error-msg" id="onboardError"></div>
     <div class="success-msg" id="onboardSuccess"></div>
     <div class="links">
@@ -109,6 +112,24 @@
             </div>
 
             <div class="settings-group">
+                <h3>Scraping Direct (Bypass Paywall)</h3>
+                <div class="setting-item">
+                    <div class="label">Activer le contournement direct</div>
+                    <label class="switch">
+                        <input type="checkbox" id="directScrapingToggle" onchange="toggleDirectScraping(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="cookie-status" style="margin-bottom:8px;">
+                    <div class="dot none" id="bpcRulesDot"></div>
+                    <span id="bpcRulesText">Règles locales actives</span>
+                </div>
+                <button class="action-btn secondary" id="updateBpcBtn" style="width:100%;" onclick="updateBpcRules()">
+                    <i class="fas fa-sync"></i> Mettre à jour les règles
+                </button>
+            </div>
+
+            <div class="settings-group">
                 <h3>Stockage local</h3>
                 <div class="setting-item">
                     <div class="label">Articles sauvegardés</div>
@@ -125,6 +146,7 @@
             <div class="article-header">
                 <button class="back-btn" onclick="closeArticle()"><i class="fas fa-arrow-left"></i></button>
                 <span class="article-title" id="viewerArticleTitle"></span>
+                <button class="copy-btn" onclick="copyArticleText()" title="Copier le texte"><i class="fas fa-copy"></i></button>
                 <button class="share-btn" onclick="shareArticle()" title="Partager l'article"><i class="fas fa-share-alt"></i></button>
                 <button class="delete-btn" onclick="confirmDeleteArticle()" title="Supprimer l'article"><i class="fas fa-trash"></i></button>
                 <button class="pdf-btn" onclick="openPdf()"><i class="fas fa-file-pdf"></i> PDF</button>

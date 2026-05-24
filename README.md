@@ -9,9 +9,13 @@ Le principe est simple : lorsque vous êtes sur un article payant depuis votre n
 ## 🚀 Fonctionnalités Clés
 
 - **100 % Client-Side / Autonome** : Toutes les requêtes HTTP, l'authentification et l'analyse HTML se font localement sur le téléphone.
+- **Contournement Direct (Bypass Paywalls Clean)** : Support du contournement direct pour les articles de presse compatibles (Le Monde, Le Figaro, etc.) sans passer par Europresse, grâce à l'intégration du moteur BPC.
+- **Mises à jour des règles BPC en un clic** : Téléchargement et extraction natifs asynchrones (via flux ZIP en mémoire) des dernières règles de contournement BPC officielles directement depuis l'onglet Paramètres.
+- **Saut d'onboarding & Utilisation autonome** : Possibilité d'ignorer la configuration Europresse au démarrage. Si aucun compte BnF n'est configuré, l'application fonctionne de manière autonome en mode contournement direct (BPC) uniquement et évite de contacter Europresse.
+- **Partage & Copie intégrale** : Possibilité de copier le texte brut complet de l'article dans le presse-papiers ou de le partager directement à d'autres applications sous forme textuelle depuis la barre d'outils de la visionneuse.
 - **Interception Intelligente des Partages** : Gère les textes de partage complexes (contenant à la fois le titre et le lien de l'article) pour extraire automatiquement l'URL et le titre d'origine.
 - **Bypass WAF (Web Application Firewall)** : En utilisant le titre extrait du partage comme titre de recherche prioritaire, l'application évite d'avoir à scraper le site d'origine et contourne ainsi les blocages de sécurité (erreurs 403 Cloudflare/WAF).
-- **Recherche Directe par Mots-clés** : Vous pouvez saisir directement des mots-clés ou un titre dans la barre de recherche au lieu d'un lien d'article.
+- **Recherche Directe par Mots-clés** : Saisie directe de mots-clés ou d'un titre dans la barre de recherche au lieu d'un lien d'article.
 - **Nettoyage Automatique des Highlights** : Supprime automatiquement les balises de surlignage jaune (`<mark>`, classes `.hlterms`) insérées par Europresse.
 - **Génération PDF Locale** : Génère et enregistre un PDF propre et mis en page de l'article directement dans le stockage de l'appareil via l'API d'impression Android native.
 

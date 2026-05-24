@@ -441,4 +441,105 @@ public class BnfLoginPlugin extends Plugin {
         result.put("success", true);
         call.resolve(result);
     }
+
+    @PluginMethod()
+    public void downloadAndExtractBpcRules(PluginCall call) {
+        String zipUrlStr = "https://gitflic.ru/project/magnolia1234/bpc_uploads/blob/raw?file=bypass-paywalls-chrome-clean-master.zip";
+        Log.d(TAG, "downloadAndExtractBpcRules: starting download from " + zipUrlStr);
+
+        new Thread(() -> {
+            try {
+                java.net.URL url = new java.net.URL(zipUrlStr);
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(30000);
+                conn.setReadTimeout(30000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                conn.setInstanceFollowRedirects(true);
+
+                int status = conn.getResponseCode();
+                int redirects = 0;
+                while ((status == 301 || status == 302 || status == 303 || status == 307 || status == 308) && redirects < 5) {
+                    redirects++;
+                    String location = conn.getHeaderField("Location");
+                    url = new java.net.URL(url, location);
+                    conn = (java.net.HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(30000);
+                    conn.setReadTimeout(30000);
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                    conn.setInstanceFollowRedirects(true);
+                    status = conn.getResponseCode();
+                }
+
+                Log.d(TAG, "downloadAndExtractBpcRules: HTTP status=" + status);
+
+                if (status != 200) {
+                    JSObject result = new JSObject();
+                    result.put("success", false);
+                    result.put("error", "HTTP error " + status + " during zip download");
+                    call.resolve(result);
+                    return;
+                }
+
+                java.io.InputStream is = conn.getInputStream();
+                java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(is);
+                java.util.zip.ZipEntry entry;
+
+                String sitesJs = null;
+                String contentScriptJs = null;
+                String contentScriptFrJs = null;
+
+                byte[] buffer = new byte[8192];
+
+                while ((entry = zis.getNextEntry()) != null) {
+                    String name = entry.getName();
+                    if (name.endsWith("sites.js")) {
+                        sitesJs = readEntryToString(zis, buffer);
+                        Log.d(TAG, "Extracted sites.js: " + sitesJs.length() + " chars");
+                    } else if (name.endsWith("contentScript.js")) {
+                        contentScriptJs = readEntryToString(zis, buffer);
+                        Log.d(TAG, "Extracted contentScript.js: " + contentScriptJs.length() + " chars");
+                    } else if (name.endsWith("cs_local/contentScript_fr.js") || name.endsWith("contentScript_fr.js")) {
+                        contentScriptFrJs = readEntryToString(zis, buffer);
+                        Log.d(TAG, "Extracted contentScript_fr.js: " + contentScriptFrJs.length() + " chars");
+                    }
+                    zis.closeEntry();
+                }
+                zis.close();
+                is.close();
+
+                if (sitesJs == null || contentScriptJs == null || contentScriptFrJs == null) {
+                    JSObject result = new JSObject();
+                    result.put("success", false);
+                    result.put("error", "Could not find all required files in the zip");
+                    call.resolve(result);
+                    return;
+                }
+
+                JSObject result = new JSObject();
+                result.put("success", true);
+                result.put("sites_js", sitesJs);
+                result.put("script_js", contentScriptJs);
+                result.put("script_fr_js", contentScriptFrJs);
+                call.resolve(result);
+
+            } catch (Exception e) {
+                Log.e(TAG, "downloadAndExtractBpcRules error", e);
+                JSObject result = new JSObject();
+                result.put("success", false);
+                result.put("error", e.getMessage());
+                call.resolve(result);
+            }
+        }).start();
+    }
+
+    private String readEntryToString(java.util.zip.ZipInputStream zis, byte[] buffer) throws java.io.IOException {
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        int len;
+        while ((len = zis.read(buffer)) != -1) {
+            baos.write(buffer, 0, len);
+        }
+        return baos.toString("UTF-8");
+    }
 }
