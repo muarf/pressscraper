@@ -182,6 +182,9 @@
 
     // ===== RECHERCHE =====
     async function search(query, options = {}) {
+        if (!navigator.onLine) {
+            throw new Error('Aucune connexion Internet');
+        }
         const urlParams = new URLSearchParams({
             from: options.from || 0,
             size: options.size || 30

@@ -467,6 +467,11 @@
         const input = document.getElementById('urlInput').value.trim();
         if (!input) { toast('Entrez un lien d\'article ou des mots-clés', 'error'); return; }
 
+        if (!navigator.onLine) {
+            toast('Aucune connexion Internet. Le scraping nécessite une connexion réseau.', 'error');
+            return;
+        }
+
         if (window.Scraper) {
             window.Scraper.lastQuery = null;
         }
