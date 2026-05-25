@@ -585,21 +585,110 @@
         // ===========================================
         for (const provider of activeProviders) {
             if (provider === 'cafeyn') {
-                if (!isUrl || !window.Cafeyn || !window.Cafeyn.isTokenValid()) continue;
+                if (!window.Cafeyn || !window.Cafeyn.isTokenValid()) continue;
                 onProgress('Cafeyn', 'Récupération via Cafeyn...', 10);
                 try {
-                    const slug = window.Cafeyn.extractSlugFromUrl(titleOrUrl);
+                    let slug = null;
+                    if (isUrl) {
+                        slug = window.Cafeyn.extractSlugFromUrl(titleOrUrl);
+                    }
+
                     if (slug) {
-                        const result = await window.Cafeyn.fetchArticle(slug);
-                        if (result && result.html) {
-                            onProgress('Cafeyn', 'Succès !', 95);
-                            return {
-                                html: result.html,
-                                title: result.title || fallbackTitle || '',
-                                source: 'Cafeyn',
-                                url: titleOrUrl
-                            };
+                        onProgress('Cafeyn', 'Téléchargement de l\'article...', 40);
+                        const details = await window.Cafeyn.fetchArticle(slug);
+                        const finalHtml = window.Cafeyn.articleToHtml(details);
+
+                        onProgress('Cafeyn', 'Succès !', 95);
+                        return {
+                            html: finalHtml,
+                            title: details.title || fallbackTitle || '',
+                            source: details.publicationName || 'Cafeyn',
+                            url: titleOrUrl
+                        };
+                    } else {
+                        // Mode recherche par mots-clés ou URL de presse qu'on doit chercher
+                        let searchQuery = '';
+                        let originalTitle = '';
+                        if (isUrl) {
+                            const { title } = await getExtractedTitleAndDate();
+                            if (!title) {
+                                console.warn('[Cafeyn] Aucun titre extrait pour la recherche de l\'URL');
+                                continue;
+                            }
+                            originalTitle = title;
+                            searchQuery = processTitleToQuery(title) || title;
+                        } else {
+                            originalTitle = titleOrUrl;
+                            searchQuery = titleOrUrl;
                         }
+
+                        onProgress('Cafeyn', `Recherche: "${searchQuery}"...`, 30);
+                        let searchRes = await window.Cafeyn.search(searchQuery);
+                        let items = searchRes?.articles?.collection || [];
+
+                        if (items.length === 0) {
+                            const queryWords = searchQuery.split(/\s+/);
+                            if (queryWords.length > 5) {
+                                const shortenedQuery = queryWords.slice(0, 5).join(' ');
+                                onProgress('Cafeyn', `Aucun résultat. Nouvelle tentative avec : "${shortenedQuery}"...`, 35);
+                                console.log('[Cafeyn] Retrying search with shortened query:', shortenedQuery);
+                                searchRes = await window.Cafeyn.search(shortenedQuery);
+                                items = searchRes?.articles?.collection || [];
+                            }
+                        }
+
+                        if (items.length === 0) {
+                            const queryWords = searchQuery.split(/\s+/);
+                            const filteredWords = queryWords.filter(w => !/^l[aeiouyéàèùâêîôûëïü]/i.test(w));
+                            if (filteredWords.length > 0 && filteredWords.length < queryWords.length) {
+                                const elisionFreeQuery = filteredWords.slice(0, 5).join(' ');
+                                onProgress('Cafeyn', `Aucun résultat. Nouvelle tentative sans élisions : "${elisionFreeQuery}"...`, 38);
+                                console.log('[Cafeyn] Retrying search without potential elisions:', elisionFreeQuery);
+                                searchRes = await window.Cafeyn.search(elisionFreeQuery);
+                                items = searchRes?.articles?.collection || [];
+                            }
+                        }
+
+                        if (items.length === 0) {
+                            console.warn('[Cafeyn] Aucun résultat pour :', searchQuery);
+                            continue;
+                        }
+
+                        // Trouver le meilleur match par similarité
+                        let bestMatch = null;
+                        let maxSim = 0;
+
+                        items.forEach(item => {
+                            if (item.formattedUrl && item.title) {
+                                const sim = calculateSimilarity(originalTitle, item.title);
+                                if (sim > maxSim) {
+                                    maxSim = sim;
+                                    bestMatch = item;
+                                }
+                            }
+                        });
+
+                        // Fallback sur le premier résultat si pas de similarité forte détectée
+                        if (!bestMatch) {
+                            bestMatch = items.find(item => item.formattedUrl && item.title) || items[0];
+                        }
+
+                        if (!bestMatch || !bestMatch.formattedUrl) {
+                            console.warn('[Cafeyn] Aucun article valide trouvé dans les résultats');
+                            continue;
+                        }
+
+                        onProgress('Cafeyn', `Téléchargement de l'article...`, 70);
+                        const details = await window.Cafeyn.fetchArticle(bestMatch.formattedUrl);
+                        const finalHtml = window.Cafeyn.articleToHtml(details);
+
+                        onProgress('Cafeyn', 'Succès !', 95);
+                        return {
+                            html: finalHtml,
+                            title: details.title || fallbackTitle || '',
+                            source: details.publicationName || 'Cafeyn',
+                            url: titleOrUrl
+                        };
                     }
                 } catch (cafeynErr) {
                     console.warn('[Cafeyn] Échec :', cafeynErr.message);
@@ -645,8 +734,29 @@
                         }
 
                         onProgress('PressReader', `Recherche: "${searchQuery}"...`, 30);
-                        const items = await window.PressReader.search(searchQuery, UA);
+                        let items = await window.PressReader.search(searchQuery, UA);
                         
+                        if (!items || items.length === 0) {
+                            const queryWords = searchQuery.split(/\s+/);
+                            if (queryWords.length > 5) {
+                                const shortenedQuery = queryWords.slice(0, 5).join(' ');
+                                onProgress('PressReader', `Aucun résultat. Nouvelle tentative avec : "${shortenedQuery}"...`, 35);
+                                console.log('[PressReader] Retrying search with shortened query:', shortenedQuery);
+                                items = await window.PressReader.search(shortenedQuery, UA);
+                            }
+                        }
+
+                        if (!items || items.length === 0) {
+                            const queryWords = searchQuery.split(/\s+/);
+                            const filteredWords = queryWords.filter(w => !/^l[aeiouyéàèùâêîôûëïü]/i.test(w));
+                            if (filteredWords.length > 0 && filteredWords.length < queryWords.length) {
+                                const elisionFreeQuery = filteredWords.slice(0, 5).join(' ');
+                                onProgress('PressReader', `Aucun résultat. Nouvelle tentative sans élisions : "${elisionFreeQuery}"...`, 38);
+                                console.log('[PressReader] Retrying search without potential elisions:', elisionFreeQuery);
+                                items = await window.PressReader.search(elisionFreeQuery, UA);
+                            }
+                        }
+
                         if (!items || items.length === 0) {
                             console.warn('[PressReader] Aucun résultat de recherche pour :', searchQuery);
                             continue;

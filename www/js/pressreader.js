@@ -124,7 +124,7 @@
         if (!BnfLogin) throw new Error("Appel natif requis.");
 
         const token = await ensureSession(UA);
-        const articleUrl = `${API_BASE}/v1/articles/${articleId}/?articleFields=8175&isHyphenated=true&fullBody=true`;
+        const articleUrl = `${API_BASE}/v1/articles/${articleId}/?articleFields=8191&isHyphenated=true&fullBody=true`;
 
         const response = await BnfLogin.httpRequest({
             url: articleUrl,
@@ -218,7 +218,13 @@
         // Rendu des paragraphes
         if (article.paragraphs && Array.isArray(article.paragraphs) && article.paragraphs.length > 0) {
             article.paragraphs.forEach(p => {
-                html += `<p>${p}</p>`;
+                if (p.type === 'text' && p.text) {
+                    html += `<p>${p.text}</p>`;
+                } else if (p.type === 'image' && p.imageId) {
+                    html += `<figure><img src="https://ingress.pressreader.com/services/v1/images/${encodeURIComponent(p.imageId)}" alt="${p.caption || ''}" style="max-width:100%"/></figure>`;
+                } else if (p.type === 'image' && p.text) {
+                    html += `<figure><img src="https://ingress.pressreader.com/services/v1/images/${encodeURIComponent(p.text)}" alt="" style="max-width:100%"/></figure>`;
+                }
             });
         } else if (article.shortContent) {
             html += `<p>${article.shortContent}</p>`;
