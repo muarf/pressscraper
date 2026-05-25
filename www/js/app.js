@@ -14,7 +14,7 @@
     // ===== ÉTAT GLOBAL =====
     let state = {
         // Ordre des providers (priorité de scraping)
-        providerOrder: ['bnf', 'cafeyn', 'pressreader', 'bpc'],
+        providerOrder: ['bpc', 'pressreader', 'cafeyn', 'bnf'],
         // Providers activés/désactivés
         providerEnabled: {
             bnf: true,
@@ -55,12 +55,17 @@
                 const parsed = JSON.parse(s);
                 // Migration de l'ancien format (provider unique) vers le nouveau (providerOrder)
                 if (parsed.provider && !parsed.providerOrder) {
-                    parsed.providerOrder = ['bnf', 'cafeyn', 'pressreader', 'bpc'];
+                    parsed.providerOrder = ['bpc', 'pressreader', 'cafeyn', 'bnf'];
                     parsed.providerEnabled = parsed.providerEnabled || {};
                     // Marquer l'ancien provider comme actif, désactiver les autres
                     const oldProvider = parsed.provider;
-                    const providers = ['bnf', 'cafeyn', 'pressreader', 'bpc'];
+                    const providers = ['bpc', 'pressreader', 'cafeyn', 'bnf'];
                     providers.forEach(p => { parsed.providerEnabled[p] = (p === oldProvider); });
+                }
+                // Migration v2 : réordonner si l'ordre commence encore par 'bnf' (ancienne valeur par défaut)
+                if (parsed.providerOrder && parsed.providerOrder[0] === 'bnf') {
+                    parsed.providerOrder = ['bpc', 'pressreader', 'cafeyn', 'bnf'];
+                    console.log('[MIGRATE] providerOrder réinitialisé à bpc-first');
                 }
                 Object.assign(state, parsed);
             }
@@ -70,7 +75,7 @@
     function save() {
         // Persister les données non-sensibles dans localStorage
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            providerOrder: state.providerOrder || ['bnf', 'cafeyn', 'pressreader', 'bpc'],
+            providerOrder: state.providerOrder || ['bpc', 'pressreader', 'cafeyn', 'bnf'],
             providerEnabled: state.providerEnabled || {},
             bnfCookies: state.bnfCookies,
             bnfCookiesHeader: state.bnfCookiesHeader,

@@ -520,7 +520,7 @@
         const UA = await getUA();
 
         const isUrl = titleOrUrl.startsWith('http');
-        const providerOrder = state.providerOrder || ['bnf', 'cafeyn', 'pressreader', 'bpc'];
+        const providerOrder = state.providerOrder || ['bpc', 'pressreader', 'cafeyn', 'bnf'];
         const providerEnabled = state.providerEnabled || {};
         const activeProviders = providerOrder.filter(k => providerEnabled[k] !== false);
 
@@ -821,29 +821,6 @@
                             }
                             console.warn('[BnF Proxy] Échec, tentative de fallback BPC:', bnfErr.message);
                         }
-                    }
-                }
-
-                // ==========================================
-                // === INTERCEPTION BYPASS PAYWALLS (BPC) ===
-                // ==========================================
-                if (isUrl && state.directScrapingEnabled !== false) {
-                    try {
-                        const urlObj = new URL(titleOrUrl);
-                        const hostname = urlObj.hostname;
-                        const bpcConfig = findBpcSiteConfig(hostname);
-
-                        if (bpcConfig) {
-                            console.log('[BPC] Direct scraping match found for:', hostname, '| Rule:', bpcConfig.name);
-                            onProgress('Bypass Direct', `Bypass direct actif pour ${bpcConfig.name}...`, 10);
-                            const scrapedDirect = await runBpcDirectScraping(titleOrUrl, bpcConfig, UA, onProgress);
-                            if (scrapedDirect) {
-                                onProgress('Bypass Direct', 'Bypass direct réussi !', 90);
-                                return scrapedDirect;
-                            }
-                        }
-                    } catch (bpcError) {
-                        console.warn('[BPC] Direct bypass failed, falling back to Europresse:', bpcError);
                     }
                 }
 
@@ -1554,7 +1531,7 @@
 
         const startTime = Date.now();
         const checkInterval = 100;
-        const maxWaitTime = 2500;
+        const maxWaitTime = 8000; // archive.is can be slow, allow up to 8s
 
         // 8. Extraction du contenu et validation - Définition des sélecteurs
         let contentSelector = '';
@@ -1568,8 +1545,9 @@
         else if (articleDomain.includes('la-croix.com')) contentSelector = '.article-body';
         else if (articleDomain.includes('lesoir.be')) contentSelector = '.r-content, article.r-article';
         else if (articleDomain.includes('lamontagne.fr') || articleDomain.includes('lepopulaire.fr') || articleDomain.includes('larep.fr') || articleDomain.includes('le-pays.fr')) contentSelector = 'div#content section > div.flex-col';
+        else if (articleDomain.includes('letemps.ch')) contentSelector = 'div#article-body-wrapper';
 
-        const paywallSelector = 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget, meta[name="premium"][content="true"]';
+        const paywallSelector = 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget, meta[name="premium"][content="true"], div.post-subscribe, div.post__content--faded';
 
         await new Promise((resolve) => {
             const timer = setInterval(() => {
