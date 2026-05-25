@@ -180,9 +180,107 @@
     init();
 
     // ===== GESTION DES ÉCRANS =====
+    let currentOnboardingSlide = 0;
+    const totalOnboardingSlides = 6;
+
+    window.toggleOnboardCafeynFields = function(visible) {
+        document.getElementById('onboardCafeynFields').style.display = visible ? 'block' : 'none';
+    };
+
+    window.toggleOnboardCafeynAdvanced = function() {
+        const el = document.getElementById('onboardCafeynAdvanced');
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    };
+
+    window.toggleOnboardBnfFields = function(visible) {
+        document.getElementById('onboardBnfFields').style.display = visible ? 'block' : 'none';
+    };
+
+    window.goToOnboardingSlide = function(index) {
+        if (index < 0 || index >= totalOnboardingSlides) return;
+        currentOnboardingSlide = index;
+        updateOnboardingSlidesUI();
+    };
+
+    window.nextOnboardingSlide = function() {
+        if (currentOnboardingSlide < totalOnboardingSlides - 1) {
+            currentOnboardingSlide++;
+            updateOnboardingSlidesUI();
+        }
+    };
+
+    window.prevOnboardingSlide = function() {
+        if (currentOnboardingSlide > 0) {
+            currentOnboardingSlide--;
+            updateOnboardingSlidesUI();
+        }
+    };
+
+    function updateOnboardingSlidesUI() {
+        const slides = document.querySelectorAll('.onboarding-slide');
+        slides.forEach(s => {
+            const idx = parseInt(s.getAttribute('data-slide'), 10);
+            if (idx === currentOnboardingSlide) {
+                s.classList.add('active');
+            } else {
+                s.classList.remove('active');
+            }
+        });
+
+        document.getElementById('onboardingStepInfo').textContent = `Étape ${currentOnboardingSlide + 1} sur ${totalOnboardingSlides}`;
+
+        const dots = document.querySelectorAll('.onboarding-dots .dot');
+        dots.forEach((dot, idx) => {
+            if (idx === currentOnboardingSlide) {
+                dot.classList.add('active');
+            } else {
+                dot.classList.remove('active');
+            }
+        });
+
+        const prevBtn = document.getElementById('onboardPrevBtn');
+        const nextBtn = document.getElementById('onboardNextBtn');
+
+        if (currentOnboardingSlide === 0) {
+            prevBtn.style.visibility = 'hidden';
+        } else {
+            prevBtn.style.visibility = 'visible';
+        }
+
+        if (currentOnboardingSlide === totalOnboardingSlides - 1) {
+            nextBtn.style.visibility = 'hidden';
+        } else {
+            nextBtn.style.visibility = 'visible';
+            if (currentOnboardingSlide === totalOnboardingSlides - 2) {
+                nextBtn.innerHTML = 'Terminer <i class="fas fa-check"></i>';
+            } else {
+                nextBtn.innerHTML = 'Suivant <i class="fas fa-chevron-right"></i>';
+            }
+        }
+    }
+
     function showOnboarding() {
         document.getElementById('onboardingScreen').style.display = 'flex';
         document.getElementById('mainApp').style.display = 'none';
+
+        if (state.bnfUsername) document.getElementById('onboardBnfUser').value = state.bnfUsername;
+        if (state.bnfPassword) document.getElementById('onboardBnfPass').value = state.bnfPassword;
+        if (state.cafeynUsername) document.getElementById('onboardCafeynUser').value = state.cafeynUsername;
+        if (state.cafeynPassword) document.getElementById('onboardCafeynPass').value = state.cafeynPassword;
+        if (window.Cafeyn?.cafeynState?.token) {
+            document.getElementById('onboardCafeynToken').value = window.Cafeyn.cafeynState.token;
+        }
+
+        document.getElementById('onboardDirectToggle').checked = state.directScrapingEnabled !== false;
+        document.getElementById('onboardPressreaderToggle').checked = state.providerEnabled.pressreader !== false;
+        document.getElementById('onboardCafeynToggle').checked = state.providerEnabled.cafeyn !== false;
+        document.getElementById('onboardBnfToggle').checked = state.providerEnabled.bnf !== false;
+
+        toggleOnboardCafeynFields(state.providerEnabled.cafeyn !== false);
+        toggleOnboardBnfFields(state.providerEnabled.bnf !== false);
+
+        currentOnboardingSlide = 0;
+        updateOnboardingSlidesUI();
     }
 
     async function showMainApp() {
@@ -209,10 +307,10 @@
         if (screenId === 'settingsScreen') updateSettingsUI();
     };
 
-    // ===== ONBOARDING =====
-    window.onboardLogin = async function() {
-        const username = document.getElementById('onboardUsername').value.trim();
-        const password = document.getElementById('onboardPassword').value;
+    // ===== ONBOARDING WIZARD LOGIC =====
+    window.onboardBnfLogin = async function() {
+        const username = document.getElementById('onboardBnfUser').value.trim();
+        const password = document.getElementById('onboardBnfPass').value;
         const errorEl = document.getElementById('onboardError');
         const successEl = document.getElementById('onboardSuccess');
         const btn = document.getElementById('onboardLoginBtn');
@@ -238,9 +336,9 @@
                 state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
                 save();
 
-                successEl.textContent = 'Connexion réussie !';
+                successEl.textContent = 'Connexion BnF réussie !';
                 successEl.style.display = 'block';
-                setTimeout(() => showMainApp(), 1000);
+                setTimeout(() => nextOnboardingSlide(), 1000);
             } else {
                 errorEl.textContent = result.error || 'Échec de connexion';
                 errorEl.style.display = 'block';
@@ -250,8 +348,50 @@
             errorEl.style.display = 'block';
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-key"></i> Se connecter';
+            btn.innerHTML = '<i class="fas fa-key"></i> Tester et enregistrer la connexion';
         }
+    };
+
+    window.finishOnboarding = function() {
+        const bpcActive = document.getElementById('onboardDirectToggle').checked;
+        const prActive = document.getElementById('onboardPressreaderToggle').checked;
+        const cafeynActive = document.getElementById('onboardCafeynToggle').checked;
+        const bnfActive = document.getElementById('onboardBnfToggle').checked;
+
+        state.providerEnabled.bpc = bpcActive;
+        state.directScrapingEnabled = bpcActive;
+        state.providerEnabled.pressreader = prActive;
+        state.providerEnabled.cafeyn = cafeynActive;
+        state.providerEnabled.bnf = bnfActive;
+
+        if (cafeynActive) {
+            const cafUser = document.getElementById('onboardCafeynUser').value.trim();
+            const cafPass = document.getElementById('onboardCafeynPass').value;
+            const cafToken = document.getElementById('onboardCafeynToken').value.trim();
+
+            if (cafUser && cafPass) {
+                state.cafeynUsername = cafUser;
+                state.cafeynPassword = cafPass;
+            }
+            if (cafToken) {
+                if (cafToken.startsWith('eyJ')) {
+                    window.Cafeyn.saveToken(cafToken);
+                }
+            }
+        }
+
+        if (bnfActive) {
+            const bnfUser = document.getElementById('onboardBnfUser').value.trim();
+            const bnfPass = document.getElementById('onboardBnfPass').value;
+            if (bnfUser && bnfPass) {
+                state.bnfUsername = bnfUser;
+                state.bnfPassword = bnfPass;
+            }
+        }
+
+        state.onboardingSkipped = true;
+        save();
+        showMainApp();
     };
 
     window.skipOnboarding = function() {
