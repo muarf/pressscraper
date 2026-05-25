@@ -278,9 +278,6 @@
                 case 'byline':
                     html += `<p class="byline" style="color:#888;font-size:0.9em;">${el.value}</p>`;
                     break;
-                case 'subtitle':
-                    html += `<p class="subtitle" style="font-weight:bold;font-size:1.2em;margin-bottom:16px;">${el.value}</p>`;
-                    break;
             }
         }
 
