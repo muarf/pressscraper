@@ -279,6 +279,29 @@
     let bpcPurify = null;
 
     /**
+     * Évalue sites.js dans un Web Worker pour sandboxer l'exécution.
+     * Le worker n'a pas accès à window, document, localStorage.
+     */
+    async function evalSitesDataInWorker(sitesData) {
+        return new Promise((resolve, reject) => {
+            const worker = new Worker('js/bpc-worker.js');
+            worker.onmessage = function(e) {
+                worker.terminate();
+                if (e.data.success) {
+                    resolve(e.data.sites);
+                } else {
+                    reject(new Error('[BPC] Worker evaluation failed: ' + e.data.error));
+                }
+            };
+            worker.onerror = function(err) {
+                worker.terminate();
+                reject(new Error('[BPC] Worker error: ' + err.message));
+            };
+            worker.postMessage({ sitesData });
+        });
+    }
+
+    /**
      * Initialise le framework BPC en chargeant sites.js, contentScript.js, contentScript_fr.js et purify.min.js
      * (depuis le cache localStorage mis à jour, ou en fallback depuis les assets locaux).
      */
@@ -293,11 +316,8 @@
                 sitesData = await res.text();
             }
 
-            // Evaluer sites.js dans un contexte isolé pour obtenir defaultSites
-            // sites.js fait référence à chrome/browser à la fin du fichier, nous passons des stubs
-            const evalSites = new Function('chrome', 'browser', sitesData + '; return defaultSites;');
-            const chromeStub = { runtime: { getManifest: () => ({ key: 'dummy' }) } };
-            bpcSites = evalSites(chromeStub, chromeStub);
+            // Evaluer sites.js dans un Web Worker (pas d'accès window/DOM/localStorage)
+            bpcSites = await evalSitesDataInWorker(sitesData);
             console.log('[BPC] Sites loaded. Domains count:', Object.keys(bpcSites).length);
 
             // 2. Charger contentScript.js (générique)
