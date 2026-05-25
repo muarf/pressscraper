@@ -9,7 +9,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import androidx.security.crypto.EncryptedSharedPreferences;
-import androidx.security.crypto.MasterKey;
+import androidx.security.crypto.MasterKeys;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -477,13 +477,11 @@ public class CafeynLoginPlugin extends Plugin {
     }
 
     private android.content.SharedPreferences getEncryptedPrefs(Context ctx, String name) throws GeneralSecurityException, IOException {
-        MasterKey masterKey = new MasterKey.Builder(ctx)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build();
+        String masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
         return EncryptedSharedPreferences.create(
-            ctx,
             name,
-            masterKey,
+            masterKeyAlias,
+            ctx,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         );
