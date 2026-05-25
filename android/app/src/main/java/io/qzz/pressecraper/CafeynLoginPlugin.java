@@ -147,11 +147,13 @@ public class CafeynLoginPlugin extends Plugin {
                 );
 
                 // If on login page, auto-fill and submit
-                if (url.contains("auth/login") || url.contains("mediatheques")) {
+                if ((url.contains("auth/login") || url.contains("mediatheques")) && url.contains("modules/cafeyn")) {
                     String jsCode =
                         "(function() {" +
-                        "  var u = document.querySelector(\"input[type='text'], input[id*='user'], input[name*='user'], input[name='username'], input[name='j_username'], input[placeholder*='Numéro'], input[placeholder*='card'], input[placeholder*='Identifiant']\");" +
-                        "  var p = document.querySelector(\"input[type='password'], input[name='j_password'], input[name='password']\");" +
+                        "  var form = document.querySelector('form[action*=\"modules/cafeyn\"]');" +
+                        "  if (!form) return 'no_form';" +
+                        "  var u = form.querySelector(\"input[type='text'], input[id*='user'], input[name*='user'], input[name='username'], input[name='j_username'], input[placeholder*='Numéro'], input[placeholder*='card'], input[placeholder*='Identifiant']\");" +
+                        "  var p = form.querySelector(\"input[type='password'], input[name='j_password'], input[name='password']\");" +
                         "  if (u && p) {" +
                         "    u.value = '" + safeUsername + "';" +
                         "    u.dispatchEvent(new Event('input', {bubbles: true}));" +
@@ -159,11 +161,9 @@ public class CafeynLoginPlugin extends Plugin {
                         "    p.value = '" + safePassword + "';" +
                         "    p.dispatchEvent(new Event('input', {bubbles: true}));" +
                         "    p.dispatchEvent(new Event('change', {bubbles: true}));" +
-                        "    var btn = document.querySelector(\"input[type='submit'], button[type='submit'], button.submit, .btn-primary, .btn, [type='submit']\");" +
+                        "    var btn = form.querySelector(\"input[type='submit'], button[type='submit'], button.submit, .btn-primary, .btn, [type='submit']\");" +
                         "    if (btn) { btn.click(); return 'submitted'; }" +
-                        "    var form = document.querySelector('form');" +
-                        "    if (form) { form.submit(); return 'submitted'; }" +
-                        "    return 'no_submit';" +
+                        "    form.submit(); return 'submitted';" +
                         "  }" +
                         "  return 'no_fields';" +
                         "})()";
