@@ -77,17 +77,6 @@
      */
     async function scrapeBnfProxy(proxyUrl, originalUrl, siteConfig, cookieHeader, UA, onProgress) {
         const BnfLogin = window.Capacitor.Plugins.BnfLogin;
-        const PRINT_CSS = `
-            @page { margin: 15mm 20mm; size: A4; }
-            @media print {
-                body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000; background: #fff; padding: 0; margin: 0; }
-                h1 { font-size: 18pt; font-weight: bold; margin-bottom: 12pt; line-height: 1.3; border-bottom: 1px solid #ccc; padding-bottom: 8pt; page-break-after: avoid; }
-                p, li, blockquote, figure { page-break-inside: avoid; orphans: 3; widows: 3; }
-                img { max-width: 100%; page-break-inside: avoid; }
-                a::after { content: ""; }
-            }
-        `;
-
         onProgress('BnF Proxy', `Téléchargement via BnF (${siteConfig.name})...`, 15);
 
         // ── Authentification / Initialisation spécifique des sessions proxy ──
@@ -139,7 +128,7 @@
                                     const pageTitle = articleData.title || siteConfig.name;
                                     const subtitle = articleData.subtitle ? `<p class="subtitle" style="font-weight: bold; font-size: 1.2em; margin-bottom: 20px; color: #555;">${articleData.subtitle}</p>` : '';
                                     const lead = articleData.lead ? `<p class="lead" style="font-style: italic; margin-bottom: 20px; color: #333;">${articleData.lead}</p>` : '';
-                                    const finalHtml = `<style>${PRINT_CSS}</style><h1>${pageTitle}</h1>${subtitle}${lead}${articleData.content}`;
+                                    const finalHtml = `<style>${window.PRINT_CSS}</style><h1>${pageTitle}</h1>${subtitle}${lead}${articleData.content}`;
                                     onProgress('BnF Proxy', 'Succès !', 95);
                                     return {
                                         html: finalHtml,
@@ -273,7 +262,7 @@
 
         onProgress('BnF Proxy', 'Mise en forme...', 85);
 
-        const finalHtml = `<style>${PRINT_CSS}</style><h1>${pageTitle}</h1>${contentEl ? contentEl.innerHTML : ''}`;
+        const finalHtml = `<style>${window.PRINT_CSS}</style><h1>${pageTitle}</h1>${contentEl ? contentEl.innerHTML : ''}`;
 
         return {
             html: finalHtml,
@@ -985,18 +974,7 @@
                 const cleanTitle = removeHighlightTags(visTitle);
                 const cleanContent = removeHighlightTags(contentContainer.innerHTML);
 
-                const PRINT_CSS = `
-                    @page { margin: 15mm 20mm; size: A4; }
-                    @media print {
-                        body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000; background: #fff; padding: 0; margin: 0; }
-                        h1 { font-size: 18pt; font-weight: bold; margin-bottom: 12pt; line-height: 1.3; border-bottom: 1px solid #ccc; padding-bottom: 8pt; page-break-after: avoid; }
-                        p, li, blockquote, figure { page-break-inside: avoid; orphans: 3; widows: 3; }
-                        img { max-width: 100%; page-break-inside: avoid; }
-                        a::after { content: ""; }
-                    }
-                `;
-
-                const finalHtml = `<style>${PRINT_CSS}</style><h1>${cleanTitle}</h1>${cleanContent}`;
+                const finalHtml = `<style>${window.PRINT_CSS}</style><h1>${cleanTitle}</h1>${cleanContent}`;
 
                 return {
                     html: finalHtml,
@@ -1620,18 +1598,7 @@
         const sourceName = siteConfig.name.split(' (')[0].split(' (+')[0];
 
         // Formatage final avec CSS d'impression
-        const PRINT_CSS = `
-            @page { margin: 15mm 20mm; size: A4; }
-            @media print {
-                body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000; background: #fff; padding: 0; margin: 0; }
-                h1 { font-size: 18pt; font-weight: bold; margin-bottom: 12pt; line-height: 1.3; border-bottom: 1px solid #ccc; padding-bottom: 8pt; page-break-after: avoid; }
-                p, li, blockquote, figure { page-break-inside: avoid; orphans: 3; widows: 3; }
-                img { max-width: 100%; page-break-inside: avoid; }
-                a::after { content: ""; }
-            }
-        `;
-
-        const finalHtml = `<style>${PRINT_CSS}</style><h1>${pageTitle}</h1>${contentEl.innerHTML}`;
+        const finalHtml = `<style>${window.PRINT_CSS}</style><h1>${pageTitle}</h1>${contentEl.innerHTML}`;
 
         iframe.remove();
 

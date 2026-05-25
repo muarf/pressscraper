@@ -181,18 +181,7 @@
         const date = article.date || '';
         const pubName = article.issue?.newspaper?.name || '';
 
-        const PRINT_CSS = `
-            @page { margin: 15mm 20mm; size: A4; }
-            @media print {
-                body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000; background: #fff; padding: 0; margin: 0; }
-                h1 { font-size: 18pt; font-weight: bold; margin-bottom: 12pt; line-height: 1.3; border-bottom: 1px solid #ccc; padding-bottom: 8pt; page-break-after: avoid; }
-                p, li, blockquote, figure { page-break-inside: avoid; orphans: 3; widows: 3; }
-                img { max-width: 100%; page-break-inside: avoid; }
-                a::after { content: ""; }
-            }
-        `;
-
-        let html = `<style>${PRINT_CSS}</style>`;
+        let html = `<style>${window.PRINT_CSS}</style>`;
         html += `<h1>${title}</h1>`;
         
         if (subtitle) {
