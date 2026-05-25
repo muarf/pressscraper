@@ -3,10 +3,8 @@
   "appName": "Presse Scraper",
   "webDir": "www",
   "server": {
-    "cleartextTrafficPermitted": true,
+    "cleartextTrafficPermitted": false,
     "allowNavigation": [
-      "http://141.145.223.71:5000",
-      "http://*",
       "https://*"
     ]
   },
