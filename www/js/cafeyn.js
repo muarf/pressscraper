@@ -100,6 +100,10 @@
                     body: options.body ? JSON.stringify(options.body) : undefined
                 });
 
+                if (response.error) {
+                    throw new Error(response.error);
+                }
+
                 if (response.status === 401) {
                     clearToken();
                     throw new Error('Token expiré — reconnexion nécessaire');
@@ -273,6 +277,7 @@
         fetchPublications: fetchPublications,
         articleToHtml: articleToHtml,
         extractSlugFromUrl: extractSlugFromUrl,
+        apiCall: apiCall,
         state: cafeynState
     };
 

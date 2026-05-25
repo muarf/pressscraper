@@ -1,23 +1,49 @@
 # Presse Scraper (Application Android Autonome)
 
-📰 **Presse Scraper** est une application Android **100 % autonome** permettant de lire des articles de presse sous paywall (Le Monde, Libération, Le Figaro, etc.) en s'appuyant sur votre abonnement à la **Bibliothèque nationale de France (BnF)**.
+📰 **Presse Scraper** est une application Android **100 % autonome** permettant de lire des articles de presse sous paywall (sans publicité ni pistage) en combinant 4 méthodes de récupération et d'authentification locales.
 
-Le principe est simple : lorsque vous êtes sur un article payant depuis votre navigateur ou l'application d'un journal, utilisez la fonction "Partager" d'Android et sélectionnez **Presse Scraper**. L'application se charge de s'authentifier à la BnF, d'intercepter les cookies de session, de rechercher l'article complet directement sur **Europresse**, d'en extraire le texte épuré (sans surlignages de recherche), et de générer un PDF mis en page localement sur votre téléphone.
+---
+
+## 🔍 Les 4 méthodes de récupération (Bypass)
+
+L'application tente de déverrouiller l'article partagé en interrogeant successivement les sources activées (l'ordre de priorité est entièrement personnalisable dans vos paramètres) :
+
+### 1. Bypass Direct (BPC - Bypass Paywalls Clean)
+* **Comment ça marche** : L'app télécharge la page web originale de l'article en modifiant son User-Agent (ex: imitation de Googlebot) et en exécutant les scripts officiels de [Bypass Paywalls Clean](https://gitflic.ru/project/magnolia1234/bpc_uploads) dans un environnement isolé (Iframe sandboxée) afin de lever le verrou côté client.
+* **Configuration requise** : **Aucune**. Les règles peuvent être mises à jour d'un clic dans les paramètres de l'application.
+
+### 2. Recherche PressReader (via Médiathèque Toulouse)
+* **Comment ça marche** : L'app se connecte à PressReader via la médiathèque de Toulouse Métropole, puis recherche et extrait l'article complet au format texte.
+
+### 3. Recherche Cafeyn (via Médiathèque)
+* **Comment ça marche** : L'app recherche l'article dans le catalogue Cafeyn via des requêtes de recherche intelligentes et multi-couches. Si l'article y est disponible, il est récupéré en format texte épuré avec ses images haute définition.
+* **Configuration requise** : Un compte médiathèque compatible Cafeyn, par exemple en s'inscrivant gratuitement et instantanément sur les [Médiathèques de Sud Est Avenir](https://mediatheques.sudestavenir.fr/).
+### 4. Recherche BnF Europresse (EZProxy)
+* **Comment ça marche** : L'app s'authentifie sur l'EZProxy de la BnF, effectue une recherche avancée sur la base de données Europresse avec le titre de l'article, puis extrait le texte intégral tout en supprimant automatiquement les surlignages de recherche.
+* **Configuration requise** : Un abonnement annuel BnF (Pass Lecture/Culture à 24 €, GRATUIT POUR LES RSAstes !).
+* **Idéal pour** : L'archive historique complète et tous les articles payants non trouvés par les autres méthodes.
+
+---
+
+## 📖 Utilisation
+
+Le principe est simple : lorsque vous naviguez sur un article payant :
+1. Cliquez sur la fonction **Partager** de votre téléphone et sélectionnez **Presse Scraper**.
+2. L'application intercepte l'URL partagée, extrait le titre de l'article et lance le moteur de recherche/scraping.
+3. L'article est converti en page épurée (HTML propre avec feuille de style d'impression) et peut être exporté en **PDF** mis en page localement sur le téléphone ou copié dans le presse-papiers.
 
 ---
 
 ## 🚀 Fonctionnalités Clés
 
-- **100 % Client-Side / Autonome** : Toutes les requêtes HTTP, l'authentification et l'analyse HTML se font localement sur le téléphone.
-- **Contournement Direct (Bypass Paywalls Clean)** : Support du contournement direct pour les articles de presse compatibles (Le Monde, Le Figaro, etc.) sans passer par Europresse, grâce à l'intégration du moteur BPC.
-- **Mises à jour des règles BPC en un clic** : Téléchargement et extraction natifs asynchrones (via flux ZIP en mémoire) des dernières règles de contournement BPC officielles directement depuis l'onglet Paramètres.
-- **Saut d'onboarding & Utilisation autonome** : Possibilité d'ignorer la configuration Europresse au démarrage. Si aucun compte BnF n'est configuré, l'application fonctionne de manière autonome en mode contournement direct (BPC) uniquement et évite de contacter Europresse.
-- **Partage & Copie intégrale** : Possibilité de copier le texte brut complet de l'article dans le presse-papiers ou de le partager directement à d'autres applications sous forme textuelle depuis la barre d'outils de la visionneuse.
-- **Interception Intelligente des Partages** : Gère les textes de partage complexes (contenant à la fois le titre et le lien de l'article) pour extraire automatiquement l'URL et le titre d'origine.
-- **Bypass WAF (Web Application Firewall)** : En utilisant le titre extrait du partage comme titre de recherche prioritaire, l'application évite d'avoir à scraper le site d'origine et contourne ainsi les blocages de sécurité (erreurs 403 Cloudflare/WAF).
-- **Recherche Directe par Mots-clés** : Saisie directe de mots-clés ou d'un titre dans la barre de recherche au lieu d'un lien d'article.
-- **Nettoyage Automatique des Highlights** : Supprime automatiquement les balises de surlignage jaune (`<mark>`, classes `.hlterms`) insérées par Europresse.
-- **Génération PDF Locale** : Génère et enregistre un PDF propre et mis en page de l'article directement dans le stockage de l'appareil via l'API d'impression Android native.
+* **100 % Client-Side / Autonome** : Toutes les requêtes HTTP, l'authentification et l'analyse HTML se font localement sur le téléphone. Aucun serveur intermédiaire ne stocke vos identifiants ou vos lectures.
+* **Moteur de recherche intelligent multi-essais** : 
+  - Stratégie d'extraction de noms propres (`Proper Nouns fallback`) pour faire correspondre les titres web (clickbait/SEO) avec les titres de l'édition imprimée de Cafeyn et PressReader.
+  - Retours automatiques sur les premières/dernières portions du titre en cas d'absence de résultat.
+* **Mises à jour des règles BPC en un clic** : Téléchargement et extraction natifs asynchrones (via flux ZIP en mémoire) des dernières règles de contournement BPC officielles directement depuis l'onglet Paramètres.
+* **Utilisation flexible** : Vous pouvez configurer uniquement Cafeyn, PressReader ou Europresse, ou ignorer certaines configurations. L'application s'adaptera automatiquement en interrogeant uniquement les services configurés.
+* **Export & Partage** : Copie du texte brut dans le presse-papiers ou génération de PDF propre via l'API d'impression Android native.
+* **Nettoyage automatique** : Suppression des balises de surlignage jaune (`<mark>`, classes `.hlterms`) insérées par Europresse.
 
 ---
 
@@ -33,12 +59,12 @@ Vous pouvez télécharger la dernière version de l'application (le fichier `.ap
 
 ## 🛠️ Pour les développeurs
 
-L'application est hybride, développée avec **Ionic / Capacitor** (HTML/JS) et enrichie de code natif Android (**Java**) sous forme de plugin.
+L'application est hybride, développée avec **Capacitor** (HTML/CSS/JS) et enrichie de code natif Android (**Java**) sous forme de plugins Capacitor.
 
 ### Structure du projet
-- `www/` : Code source de l'interface Web de l'application (HTML/CSS/JS).
-- `android/` : Projet Android natif généré par Capacitor.
-  - `android/app/src/main/java/io/qzz/pressecraper/BnfLoginPlugin.java` : Plugin Java gérant les requêtes HTTP (avec maintien manuel des redirections/cookies) et le déclenchement de l'impression PDF native.
+* `www/` : Code source de l'interface Web de l'application (HTML/CSS/JS).
+* `android/` : Projet Android natif généré par Capacitor.
+  - `android/app/src/main/java/io/qzz/pressecraper/BnfLoginPlugin.java` : Plugin Java gérant les requêtes HTTP (avec maintien des redirections et des cookies) et le déclenchement de l'impression PDF native.
 
 ### Commandes utiles
 

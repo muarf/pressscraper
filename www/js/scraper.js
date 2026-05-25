@@ -6,7 +6,7 @@
  * Dépendances:
  *   - window.Capacitor.Plugins.BnfLogin (plugin natif Android)
  */
-(function(global) {
+(function (global) {
     'use strict';
 
     const EUROPRESSE_DOMAIN = 'nouveau-europresse-com.bnf.idm.oclc.org';
@@ -59,7 +59,7 @@
                     return { ...site, proxyUrl: url };
                 }
             }
-        } catch(e) {/* URL invalide */}
+        } catch (e) {/* URL invalide */ }
         return null;
     }
 
@@ -119,7 +119,7 @@
                             } else {
                                 slug = pathSegments[0] || '';
                             }
-                        } catch(e) {}
+                        } catch (e) { }
 
                         if (slug) {
                             onProgress('BnF Proxy', 'Récupération via l\'API...', 40);
@@ -214,7 +214,7 @@
         // ou une action de formulaire pointant vers idm.oclc.org.
         const oclcUsernameInput = doc.querySelector('input[name="j_username"]');
         const oclcPasswordInput = doc.querySelector('input[name="j_password"]');
-        const oclcLoginForm     = doc.querySelector('form[action*="idm.oclc.org"], form[action*="bnf.idm"]');
+        const oclcLoginForm = doc.querySelector('form[action*="idm.oclc.org"], form[action*="bnf.idm"]');
         const pageDocTitle = (doc.title || '').toLowerCase();
         const isLoginPage = !!(oclcUsernameInput && oclcPasswordInput)
             || !!oclcLoginForm
@@ -296,14 +296,14 @@
     async function initBpc() {
         try {
             console.log('[BPC] Initializing rules...');
-            
+
             // 1. Charger sites.js
             let sitesData = localStorage.getItem('bpc_sites_js');
             if (!sitesData) {
                 const res = await fetch('js/bpc/sites.js');
                 sitesData = await res.text();
             }
-            
+
             // Evaluer sites.js dans un contexte isolé pour obtenir defaultSites
             // sites.js fait référence à chrome/browser à la fin du fichier, nous passons des stubs
             const evalSites = new Function('chrome', 'browser', sitesData + '; return defaultSites;');
@@ -347,7 +347,7 @@
         for (const key in bpcSites) {
             const site = bpcSites[key];
             if (!site || (!site.domain && !site.group)) continue;
-            
+
             // Si c'est un domaine direct
             if (site.domain && (hostname === site.domain || hostname.endsWith('.' + site.domain))) {
                 return { name: key, ...site };
@@ -374,7 +374,7 @@
                 const res = await window.Capacitor.Plugins.BnfLogin.getWebViewUserAgent();
                 if (res && res.userAgent) return res.userAgent;
             }
-        } catch(e) {
+        } catch (e) {
             console.warn('[SCRAPE] Could not get native UA, using fallback:', e);
         }
         return UA_FALLBACK;
@@ -453,7 +453,7 @@
             if (diffDays <= 30) return '4';
             if (diffDays <= 90) return '5';
             return '9';
-        } catch(e) { return '9'; }
+        } catch (e) { return '9'; }
     }
 
     /**
@@ -497,7 +497,7 @@
             tempDoc.querySelectorAll('.hlterms').forEach(el => el.classList.remove('hlterms'));
 
             return tempDoc.body.innerHTML;
-        } catch(e) {
+        } catch (e) {
             console.error('[CLEAN] Error removing highlights:', e);
             return html;
         }
@@ -572,7 +572,7 @@
                     slug = slug.replace(/\.html?$/, '');
                     if (slug.includes('_')) slug = slug.split('_')[0];
                     articleTitle = slug.replace(/[-]/g, ' ').replace(/\s+\d{2,}\s*$/g, '').trim();
-                } catch (e) {}
+                } catch (e) { }
             }
 
             extractedTitle = articleTitle;
@@ -668,13 +668,8 @@
                             }
                         });
 
-                        // Fallback sur le premier résultat si pas de similarité forte détectée
-                        if (!bestMatch) {
-                            bestMatch = items.find(item => item.formattedUrl && item.title) || items[0];
-                        }
-
-                        if (!bestMatch || !bestMatch.formattedUrl) {
-                            console.warn('[Cafeyn] Aucun article valide trouvé dans les résultats');
+                        if (!bestMatch || maxSim < 35) {
+                            console.warn('[Cafeyn] Aucun article avec une similarité suffisante trouvé (maxSim: ' + maxSim + '%)');
                             continue;
                         }
 
@@ -735,7 +730,7 @@
 
                         onProgress('PressReader', `Recherche: "${searchQuery}"...`, 30);
                         let items = await window.PressReader.search(searchQuery, UA);
-                        
+
                         if (!items || items.length === 0) {
                             const queryWords = searchQuery.split(/\s+/);
                             if (queryWords.length > 5) {
@@ -762,7 +757,7 @@
                             continue;
                         }
 
-                        // Trouver le meilleur match par similarité (ou par défaut le premier résultat)
+                        // Trouver le meilleur match par similarité
                         let bestMatch = null;
                         let maxSim = 0;
 
@@ -776,13 +771,8 @@
                             }
                         });
 
-                        // Fallback sur le premier résultat si pas de similarité forte détectée
-                        if (!bestMatch) {
-                            bestMatch = items.find(item => item.id && item.title) || items[0];
-                        }
-
-                        if (!bestMatch || !bestMatch.id) {
-                            console.warn('[PressReader] Aucun article valide trouvé dans les résultats');
+                        if (!bestMatch || maxSim < 35) {
+                            console.warn('[PressReader] Aucun article avec une similarité suffisante trouvé (maxSim: ' + maxSim + '%)');
                             continue;
                         }
 
@@ -842,7 +832,7 @@
                         const urlObj = new URL(titleOrUrl);
                         const hostname = urlObj.hostname;
                         const bpcConfig = findBpcSiteConfig(hostname);
-                        
+
                         if (bpcConfig) {
                             console.log('[BPC] Direct scraping match found for:', hostname, '| Rule:', bpcConfig.name);
                             onProgress('Bypass Direct', `Bypass direct actif pour ${bpcConfig.name}...`, 10);
@@ -856,7 +846,7 @@
                         console.warn('[BPC] Direct bypass failed, falling back to Europresse:', bpcError);
                     }
                 }
-                
+
                 // Si Europresse n'est pas configuré, on continue au prochain provider
                 if (!state.bnfUsername || !state.bnfPassword) {
                     console.warn('[BnF] Pas de credentials Europresse, passage au provider suivant');
@@ -1046,7 +1036,7 @@
                     const urlObj = new URL(titleOrUrl);
                     const hostname = urlObj.hostname;
                     const bpcConfig = findBpcSiteConfig(hostname);
-                    
+
                     if (bpcConfig) {
                         console.log('[BPC] Direct scraping match found for:', hostname, '| Rule:', bpcConfig.name);
                         const scrapedDirect = await runBpcDirectScraping(titleOrUrl, bpcConfig, UA, onProgress);
@@ -1070,7 +1060,7 @@
      */
     async function runBpcDirectScraping(articleUrl, siteConfig, defaultUA, onProgress) {
         const BnfLogin = window.Capacitor.Plugins.BnfLogin;
-        
+
         // 1. Détermination du User-Agent
         let customUA = defaultUA;
         if (siteConfig.useragent === 'googlebot') {
@@ -1090,7 +1080,7 @@
         };
 
         onProgress('Bypass Direct', 'Téléchargement de la page...', 20);
-        
+
         // 3. Téléchargement du HTML original
         let pageRes;
         if (BnfLogin) {
@@ -1178,7 +1168,14 @@
         iframeWindow.__locationProxy__ = locationProxy;
 
         // Stubs de l'API Chrome Extension
-        iframeWindow.chrome = { runtime: { sendMessage: () => {}, getManifest: () => ({ version: '1.0.0' }) } };
+        iframeWindow.chrome = {
+            runtime: {
+                sendMessage: () => { },
+                getManifest: () => ({ version: '1.0.0' }),
+                onMessage: { addListener: () => { } },
+                onMessageExternal: { addListener: () => { } }
+            }
+        };
         iframeWindow.browser = iframeWindow.chrome;
         iframeWindow.ext_api = iframeWindow.chrome;
         iframeWindow.ext_chromium = true;
@@ -1190,25 +1187,25 @@
         };
 
         // Fonctions d'émulation BPC
-        iframeWindow.matchDomain = function(domains, hostname = articleDomain) {
+        iframeWindow.matchDomain = function (domains, hostname = articleDomain) {
             if (typeof domains === 'string') domains = [domains];
             return domains.find(domain => hostname === domain || hostname.endsWith('.' + domain)) || false;
         };
 
-        iframeWindow.removeDOMElement = function(...elements) {
+        iframeWindow.removeDOMElement = function (...elements) {
             for (let element of elements) {
                 if (element) element.remove();
             }
         };
 
-        iframeWindow.hideDOMElement = function(...elements) {
+        iframeWindow.hideDOMElement = function (...elements) {
             for (let element of elements) {
                 if (element) element.style = 'display:none !important;';
             }
         };
 
-        iframeWindow.hideDOMStyle = function(selector, id = 1) {
-            let style = iframeDocument.querySelector('head > style#ext'+ id);
+        iframeWindow.hideDOMStyle = function (selector, id = 1) {
+            let style = iframeDocument.querySelector('head > style#ext' + id);
             if (!style && iframeDocument.head) {
                 let sheet = iframeDocument.createElement('style');
                 sheet.id = 'ext' + id;
@@ -1217,8 +1214,8 @@
             }
         };
 
-        iframeWindow.addStyle = function(css, id = 1) {
-            let style = iframeDocument.querySelector('head > style#add'+ id);
+        iframeWindow.addStyle = function (css, id = 1) {
+            let style = iframeDocument.querySelector('head > style#add' + id);
             if (!style && iframeDocument.head) {
                 let sheet = iframeDocument.createElement('style');
                 sheet.id = 'add' + id;
@@ -1227,7 +1224,7 @@
             }
         };
 
-        iframeWindow.matchKeyJson = function(key, keys) {
+        iframeWindow.matchKeyJson = function (key, keys) {
             let match = false;
             if (typeof keys === 'string') match = (key === keys);
             else if (Array.isArray(keys)) match = keys.includes(key);
@@ -1235,7 +1232,7 @@
             return match;
         };
 
-        iframeWindow.findKeyJson = function(json, keys, min_val_len = 0) {
+        iframeWindow.findKeyJson = function (json, keys, min_val_len = 0) {
             let source = '';
             if (Array.isArray(json)) {
                 for (let elem of json)
@@ -1255,7 +1252,7 @@
             return source;
         };
 
-        iframeWindow.getNestedKeys = function(obj, key) {
+        iframeWindow.getNestedKeys = function (obj, key) {
             if (key in obj) return obj[key];
             let keys = key.split('.');
             let value = obj;
@@ -1266,7 +1263,7 @@
             return value;
         };
 
-        iframeWindow.makeFigure = function(url, caption_text, img_attrib = {}, caption_attrib = {}) {
+        iframeWindow.makeFigure = function (url, caption_text, img_attrib = {}, caption_attrib = {}) {
             let elem = iframeDocument.createElement('figure');
             let img = iframeDocument.createElement('img');
             img.src = url;
@@ -1287,7 +1284,7 @@
             return elem;
         };
 
-        iframeWindow.makeLink = function(url, title, style = '') {
+        iframeWindow.makeLink = function (url, title, style = '') {
             let a_link = iframeDocument.createElement('a');
             a_link.href = url;
             a_link.innerText = title;
@@ -1295,7 +1292,7 @@
             return a_link;
         };
 
-        iframeWindow.clearPaywall = function(paywall, paywall_action) {
+        iframeWindow.clearPaywall = function (paywall, paywall_action) {
             if (paywall) {
                 if (!paywall_action) iframeWindow.removeDOMElement(...paywall);
                 else {
@@ -1307,44 +1304,44 @@
             }
         };
 
-        iframeWindow.randomInt = function(max) {
+        iframeWindow.randomInt = function (max) {
             return Math.floor(Math.random() * Math.floor(max));
         };
 
-        iframeWindow.parseHtmlEntities = function(encodedString) {
+        iframeWindow.parseHtmlEntities = function (encodedString) {
             let parser = new DOMParser();
             let doc = parser.parseFromString('<textarea>' + encodedString + '</textarea>', 'text/html');
             let dom = doc.querySelector('textarea');
             return dom.value;
         };
 
-        iframeWindow.breakText = function(str, headers = false) {
+        iframeWindow.breakText = function (str, headers = false) {
             str = str.replace(/(?:^|[A-Za-z\"\“\”\)])(\.+|\?|!)(?=[A-ZÖÜ\„\”\d][A-Za-zÀ-ÿ\„\d]{1,})/gm, "$&\n\n");
             if (headers)
                 str = str.replace(/(([a-z]{2,}|[\"\“]))(?=[A-Z](?=[A-Za-z\u00C0-\u00FF]+))/gm, "$&\n\n");
             return str;
         };
 
-        iframeWindow.decode_utf8 = function(str) {
+        iframeWindow.decode_utf8 = function (str) {
             return decodeURIComponent(escape(str));
         };
 
-        iframeWindow.getArticleJsonScript = function() {
+        iframeWindow.getArticleJsonScript = function () {
             let scripts = iframeDocument.querySelectorAll('script[type="application/ld+json"]');
             return Array.prototype.find.call(scripts, s => s.text.includes('"articleBody"') || s.text.includes('"articlebody"'));
         };
 
-        iframeWindow.getSourceJsonScript = function(filter, attributes = ':not([src], [type])') {
+        iframeWindow.getSourceJsonScript = function (filter, attributes = ':not([src], [type])') {
             let scripts = iframeDocument.querySelectorAll('script' + attributes);
             return Array.prototype.find.call(scripts, s => filter.test(s.text));
         };
 
-        iframeWindow.archiveRandomDomain = function() {
+        iframeWindow.archiveRandomDomain = function () {
             const domains = ['archive.ph', 'archive.is', 'archive.li', 'archive.today', 'archive.md', 'archive.vn'];
             return domains[Math.floor(Math.random() * domains.length)];
         };
 
-        iframeWindow.archiveLink = function(url, text_fail = 'BPC > Try for full article text:\r\n') {
+        iframeWindow.archiveLink = function (url, text_fail = 'BPC > Try for full article text:\r\n') {
             let a_link = iframeDocument.createElement('a');
             a_link.href = 'https://' + iframeWindow.archiveRandomDomain() + '/' + url;
             a_link.innerText = text_fail + a_link.href;
@@ -1353,34 +1350,34 @@
             return a_link;
         };
 
-        iframeWindow.archiveLink_renew = function(url, text_fail = 'BPC > Renew if incomplete:\r\n') {
+        iframeWindow.archiveLink_renew = function (url, text_fail = 'BPC > Renew if incomplete:\r\n') {
             return iframeWindow.archiveLink(url, text_fail);
         };
 
-        iframeWindow.getSelectorLevel = function(selector) {
+        iframeWindow.getSelectorLevel = function (selector) {
             if (selector.replace(/,\s+/g, ',').match(/[>\s]+/) && !selector.includes(':has(>'))
                 selector = selector.replace(/,\s+/g, ',').split(',').map(x => x.match(/[>\s]+/) ? x + ', ' + x.split(/[>\s]+/).pop() : x).join(', ');
             return selector;
         };
 
-        iframeWindow.header_nofix = function() {};
-        iframeWindow.blockJsReferrer = function() {};
-        iframeWindow.refreshCurrentTab = function() {};
-        iframeWindow.refreshCurrentTab_bg = function() {};
+        iframeWindow.header_nofix = function () { };
+        iframeWindow.blockJsReferrer = function () { };
+        iframeWindow.refreshCurrentTab = function () { };
+        iframeWindow.refreshCurrentTab_bg = function () { };
 
         // Fonctions réseau asynchrones
         iframeWindow.data_ext_fetch_id = 0;
         iframeWindow.data_ext_fetch = [];
 
-        iframeWindow.getExtFetch = async function(url, json_key = '', options = {}, callback, data_ext_fetch_id = 0, args = []) {
+        iframeWindow.getExtFetch = async function (url, json_key = '', options = {}, callback, data_ext_fetch_id = 0, args = []) {
             try {
                 console.log('[BPC BRIDGE] getExtFetch:', url);
                 const BnfLogin = window.parent.Capacitor?.Plugins?.BnfLogin || window.Capacitor?.Plugins?.BnfLogin;
-                
+
                 let res;
                 const reqHeaders = options.headers || {};
                 reqHeaders['User-Agent'] = customUA;
-                
+
                 if (BnfLogin) {
                     res = await BnfLogin.httpRequest({
                         url: url,
@@ -1392,7 +1389,7 @@
                     const r = await fetch(url, { method: options.method || 'GET', headers: reqHeaders, body: options.body || null });
                     res = { status: r.status, data: await r.text() };
                 }
-                
+
                 if (res && (res.status === 200 || res.status === 201)) {
                     let responseData = res.data;
                     if (json_key) {
@@ -1413,11 +1410,11 @@
             }
         };
 
-        iframeWindow.replaceDomElementExt = async function(url, proxy, base64, selector, text_fail = '', selector_source = selector, selector_archive = selector) {
+        iframeWindow.replaceDomElementExt = async function (url, proxy, base64, selector, text_fail = '', selector_source = selector, selector_archive = selector) {
             try {
                 console.log('[BPC BRIDGE] replaceDomElementExt:', url);
                 const BnfLogin = window.parent.Capacitor?.Plugins?.BnfLogin || window.Capacitor?.Plugins?.BnfLogin;
-                
+
                 let res;
                 if (BnfLogin) {
                     res = await BnfLogin.httpRequest({
@@ -1429,29 +1426,29 @@
                     const r = await fetch(url);
                     res = { status: r.status, data: await r.text() };
                 }
-                
+
                 if (res && res.status === 200 && res.data) {
                     let html = res.data;
                     if (base64) {
                         html = iframeWindow.decode_utf8(atob(html));
                         selector_source = 'body';
                     }
-                    
+
                     let sanitizedHtml = html;
                     if (iframeWindow.DOMPurify) {
                         sanitizedHtml = iframeWindow.DOMPurify.sanitize(html, iframeWindow.dompurify_options);
                     }
-                    
+
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(sanitizedHtml, 'text/html');
-                    
+
                     if (iframeWindow.selector_level) {
                         selector_source = iframeWindow.getSelectorLevel(selector_source);
                     }
-                    
+
                     const articleNew = doc.querySelector(selector_source);
                     const article = iframeDocument.querySelector(selector);
-                    
+
                     if (articleNew && article) {
                         article.parentNode.replaceChild(articleNew, article);
                         if (typeof iframeWindow.func_post === 'function') {
@@ -1464,7 +1461,7 @@
             }
         };
 
-        iframeWindow.getArchive = function(url, paywall_sel, paywall_action = '', selector, text_fail = '', selector_source = selector, selector_archive = selector) {
+        iframeWindow.getArchive = function (url, paywall_sel, paywall_action = '', selector, text_fail = '', selector_source = selector, selector_archive = selector) {
             let url_archive = 'https://' + iframeWindow.archiveRandomDomain() + '/' + (url.includes('/#/') ? encodeURIComponent(url.split('?')[0]) : url.split(/[#\?]/)[0]);
             let paywall = iframeDocument.querySelectorAll(paywall_sel);
             if (paywall.length && iframeWindow.dompurify_loaded) {
@@ -1475,10 +1472,10 @@
         };
 
         // Redirection de fetch global dans l'Iframe
-        iframeWindow.fetch = async function(resource, init) {
+        iframeWindow.fetch = async function (resource, init) {
             let url = (typeof resource === 'string') ? resource : resource.url;
             console.log('[BPC BRIDGE] fetch override intercepted:', url);
-            
+
             if (url.startsWith('http') && !url.includes(iframeWindow.location.host)) {
                 const BnfLogin = window.parent.Capacitor?.Plugins?.BnfLogin || window.Capacitor?.Plugins?.BnfLogin;
                 if (BnfLogin) {
@@ -1492,17 +1489,17 @@
                             }
                         }
                         headers['User-Agent'] = customUA;
-                        
+
                         let body = null;
                         if (init && init.body) body = init.body;
-                        
+
                         const res = await BnfLogin.httpRequest({
                             url: url,
                             method: (init && init.method) || 'GET',
                             headers: headers,
                             body: body
                         });
-                        
+
                         return {
                             ok: res.status >= 200 && res.status < 300,
                             status: res.status,
@@ -1559,11 +1556,37 @@
         const checkInterval = 100;
         const maxWaitTime = 2500;
 
+        // 8. Extraction du contenu et validation - Définition des sélecteurs
+        let contentSelector = '';
+        if (articleDomain.includes('lemonde.fr')) contentSelector = '.article__content';
+        else if (articleDomain.includes('lefigaro.fr')) contentSelector = 'div[data-component="fig-content-body"]';
+        else if (articleDomain.includes('leparisien.fr')) contentSelector = 'section#left';
+        else if (articleDomain.includes('liberation.fr')) contentSelector = '.article-body, .article__content';
+        else if (articleDomain.includes('lepoint.fr')) contentSelector = '.article-content, .article-body';
+        else if (articleDomain.includes('marianne.net')) contentSelector = '.article-body';
+        else if (articleDomain.includes('mediapart.fr')) contentSelector = '.content-article';
+        else if (articleDomain.includes('la-croix.com')) contentSelector = '.article-body';
+        else if (articleDomain.includes('lesoir.be')) contentSelector = '.r-content, article.r-article';
+        else if (articleDomain.includes('lamontagne.fr') || articleDomain.includes('lepopulaire.fr') || articleDomain.includes('larep.fr') || articleDomain.includes('le-pays.fr')) contentSelector = 'div#content section > div.flex-col';
+
+        const paywallSelector = 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget, meta[name="premium"][content="true"]';
+
         await new Promise((resolve) => {
             const timer = setInterval(() => {
                 const elapsed = Date.now() - startTime;
                 let bypassSuccess = false;
-                
+
+                let contentEl = null;
+                if (contentSelector) {
+                    contentEl = iframeDocument.querySelector(contentSelector);
+                }
+                if (!contentEl) {
+                    contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article');
+                }
+
+                const hasPaywall = iframeDocument.querySelector(paywallSelector);
+                const textLength = contentEl ? contentEl.textContent.trim().length : 0;
+
                 if (articleDomain === 'lemonde.fr') {
                     const hasParagraphs = iframeDocument.querySelectorAll('.article__paragraph').length >= 3;
                     const paywallGone = !iframeDocument.querySelector('section.lmd-paywall');
@@ -1577,12 +1600,12 @@
                     const paywallGone = !iframeDocument.querySelector('div.paywall');
                     if (leftSection && leftSection.textContent.length > 800 && paywallGone) bypassSuccess = true;
                 } else {
-                    // Règle générique
-                    const paywalls = iframeDocument.querySelectorAll('div[class*="paywall"], section[class*="paywall"], div[id*="paywall"]');
-                    const textLength = iframeDocument.body.textContent.length;
-                    if (paywalls.length === 0 && textLength > 1200) bypassSuccess = true;
+                    // Règle générique basée sur les sélecteurs
+                    if (!hasPaywall && textLength > 800) {
+                        bypassSuccess = true;
+                    }
                 }
-                
+
                 if (bypassSuccess || elapsed >= maxWaitTime) {
                     clearInterval(timer);
                     resolve();
@@ -1590,21 +1613,9 @@
             }, checkInterval);
         });
 
-        // 8. Extraction du contenu et validation
+        // Extraction finale du contenu
         onProgress('Bypass Direct', 'Extraction du texte...', 80);
 
-        // Détection de l'élément de contenu d'article
-        let contentSelector = '';
-        if (articleDomain.includes('lemonde.fr')) contentSelector = '.article__content';
-        else if (articleDomain.includes('lefigaro.fr')) contentSelector = 'div[data-component="fig-content-body"]';
-        else if (articleDomain.includes('leparisien.fr')) contentSelector = 'section#left';
-        else if (articleDomain.includes('liberation.fr')) contentSelector = '.article-body, .article__content';
-        else if (articleDomain.includes('lepoint.fr')) contentSelector = '.article-content, .article-body';
-        else if (articleDomain.includes('marianne.net')) contentSelector = '.article-body';
-        else if (articleDomain.includes('mediapart.fr')) contentSelector = '.content-article';
-        else if (articleDomain.includes('la-croix.com')) contentSelector = '.article-body';
-        else if (articleDomain.includes('lesoir.be')) contentSelector = '.r-content, article.r-article';
-        
         let contentEl = null;
         if (contentSelector) {
             contentEl = iframeDocument.querySelector(contentSelector);
@@ -1613,8 +1624,6 @@
             contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article') || iframeDocument.body;
         }
 
-        // Validation simple : si l'élément de paywall existe encore ou si le texte est trop court
-        const paywallSelector = 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget';
         const hasPaywall = iframeDocument.querySelector(paywallSelector);
         const textLength = contentEl ? contentEl.textContent.trim().length : 0;
 
