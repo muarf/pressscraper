@@ -1,11 +1,15 @@
 package io.qzz.pressecraper;
 
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
+import androidx.security.crypto.EncryptedSharedPreferences;
+import androidx.security.crypto.MasterKey;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -17,6 +21,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +38,9 @@ import java.net.URL;
 public class CafeynLoginPlugin extends Plugin {
 
     private static final String TAG = "CafeynLoginPlugin";
+    private static final String JWT_PREFS_NAME = "cafeyn_jwt_encrypted";
+    private static final String JWT_KEY = "cafeyn_jwt";
+    private static final String JWT_EXPIRY_KEY = "cafeyn_jwt_expiry";
     // GPSEA login URL with redirect to cafeyn
     private static final String CAFEYN_AUTH_URL = "https://mediatheques.sudestavenir.fr/auth/login?redirect=https://mediatheques.sudestavenir.fr/modules/cafeyn";
     private static final String CAFEYN_DOMAIN = "api.cafeyn.co";
@@ -109,50 +118,12 @@ public class CafeynLoginPlugin extends Plugin {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                Log.i(TAG, "Page finished: " + url);
+                Log.d(TAG, "Page finished: " + url);
 
-                // Log cookies for both domains
-                CookieManager cookieManager = CookieManager.getInstance();
-                String gpseaCookies = cookieManager.getCookie("https://mediatheques.sudestavenir.fr");
-                String cafeynCookies = cookieManager.getCookie("https://www.cafeyn.co");
-                Log.i(TAG, "Cookies for GPSEA: " + (gpseaCookies != null ? gpseaCookies : "null"));
-                Log.i(TAG, "Cookies for Cafeyn: " + (cafeynCookies != null ? cafeynCookies : "null"));
-
-                boolean hasToken = false;
-                if (gpseaCookies != null && gpseaCookies.contains("Cafeyn_authtoken_V2")) {
-                    hasToken = true;
-                }
-                if (cafeynCookies != null && cafeynCookies.contains("Cafeyn_authtoken_V2")) {
-                    hasToken = true;
-                }
-
-                // Check if redirected to cafeyn.co (login succeeded)
-                if (hasToken || (url.contains("cafeyn.co") && !url.contains("login"))) {
+                // Check if redirected to cafeyn (login succeeded)
+                if (url.contains("cafeyn") && !url.contains("login")) {
                     handleLoginSuccess(url);
                     return;
-                }
-
-                // If on GPSEA Cafeyn module page (but not the login page with redirect param)
-                if (url.contains("modules/cafeyn") && !url.contains("auth/login")) {
-                    String jsCode =
-                        "(function() {" +
-                        "  if (document.getElementById('anubis_challenge') || document.title.indexOf('robot') !== -1) {" +
-                        "    return JSON.stringify({ type: 'challenge' });" +
-                        "  }" +
-                        "  var link = document.querySelector(\"a[href*='cafeyn.co'], a[href*='modules/cafeyn/']\");" +
-                        "  if (link && link.href !== window.location.href) {" +
-                        "    var href = link.href;" +
-                        "    window.location.href = href;" +
-                        "    return JSON.stringify({ type: 'portal_redirecting', href: href });" +
-                        "  }" +
-                        "  var allLinks = Array.from(document.querySelectorAll('a')).map(a => ({ text: a.textContent.trim(), href: a.href }));" +
-                        "  return JSON.stringify({ type: 'portal', title: document.title, links: allLinks });" +
-                        "})()";
-
-                    view.evaluateJavascript(jsCode, resultStr -> {
-                        Log.i(TAG, "Portal page analysis: " + resultStr);
-                    });
-                    return; // Do not destroy webview, wait for redirect or user interaction
                 }
 
                 // Check for login errors
@@ -179,10 +150,8 @@ public class CafeynLoginPlugin extends Plugin {
                 if (url.contains("auth/login") || url.contains("mediatheques")) {
                     String jsCode =
                         "(function() {" +
-                        "  var form = document.querySelector(\"form[action*='cafeyn']\") || document.querySelector('form');" +
-                        "  if (!form) return 'no_form';" +
-                        "  var u = form.querySelector(\"input[name='username'], input[type='text'], input[placeholder*='Numéro'], input[placeholder*='Identifiant']\");" +
-                        "  var p = form.querySelector(\"input[name='password'], input[type='password']\");" +
+                        "  var u = document.querySelector(\"input[type='text'], input[id*='user'], input[name*='user'], input[name='username'], input[name='j_username'], input[placeholder*='Numéro'], input[placeholder*='card'], input[placeholder*='Identifiant']\");" +
+                        "  var p = document.querySelector(\"input[type='password'], input[name='j_password'], input[name='password']\");" +
                         "  if (u && p) {" +
                         "    u.value = '" + safeUsername + "';" +
                         "    u.dispatchEvent(new Event('input', {bubbles: true}));" +
@@ -190,13 +159,17 @@ public class CafeynLoginPlugin extends Plugin {
                         "    p.value = '" + safePassword + "';" +
                         "    p.dispatchEvent(new Event('input', {bubbles: true}));" +
                         "    p.dispatchEvent(new Event('change', {bubbles: true}));" +
-                        "    form.submit(); return 'submitted';" +
+                        "    var btn = document.querySelector(\"input[type='submit'], button[type='submit'], button.submit, .btn-primary, .btn, [type='submit']\");" +
+                        "    if (btn) { btn.click(); return 'submitted'; }" +
+                        "    var form = document.querySelector('form');" +
+                        "    if (form) { form.submit(); return 'submitted'; }" +
+                        "    return 'no_submit';" +
                         "  }" +
                         "  return 'no_fields';" +
                         "})()";
 
                     view.evaluateJavascript(jsCode, fillResult -> {
-                        Log.i(TAG, "Form fill: " + fillResult);
+                        Log.d(TAG, "Form fill: " + fillResult);
                     });
                 }
             }
@@ -210,34 +183,15 @@ public class CafeynLoginPlugin extends Plugin {
             timeoutHandler.removeCallbacks(timeoutRunnable);
         }
 
-        // Try to extract token from URL query parameters first
-        String jwt = null;
-        try {
-            android.net.Uri uri = android.net.Uri.parse(url);
-            jwt = uri.getQueryParameter("token");
-            if (jwt != null) {
-                Log.i(TAG, "Extracted JWT from URL parameter: " + jwt.substring(0, Math.min(50, jwt.length())) + "...");
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "Error parsing URL for token parameter: " + e.getMessage());
-        }
-
         CookieManager cookieManager = CookieManager.getInstance();
-        String cookiesStr = cookieManager.getCookie(url); // Get cookies from the actual redirected URL (GPSEA module page or Cafeyn)
-        if (cookiesStr == null || cookiesStr.isEmpty()) {
-            cookiesStr = cookieManager.getCookie("https://www.cafeyn.co");
-        }
-        if (cookiesStr == null || cookiesStr.isEmpty()) {
-            cookiesStr = cookieManager.getCookie("https://mediatheques.sudestavenir.fr");
-        }
-        Log.i(TAG, "handleLoginSuccess on " + url);
-        Log.i(TAG, "Cookies: " + (cookiesStr != null ? cookiesStr.substring(0, Math.min(200, cookiesStr.length())) + "..." : "null"));
+        String cookiesStr = cookieManager.getCookie("https://" + CAFEYN_DOMAIN);
+        Log.d(TAG, "Cookies: " + (cookiesStr != null ? cookiesStr.substring(0, Math.min(200, cookiesStr.length())) + "..." : "null"));
 
         JSObject result = new JSObject();
 
-        try {
-            JSONArray cookieArray = new JSONArray();
-            if (cookiesStr != null && !cookiesStr.isEmpty()) {
+        if (cookiesStr != null && !cookiesStr.isEmpty()) {
+            try {
+                JSONArray cookieArray = new JSONArray();
                 String[] pairs = cookiesStr.split(";");
                 for (String pair : pairs) {
                     String[] parts = pair.trim().split("=", 2);
@@ -248,30 +202,27 @@ public class CafeynLoginPlugin extends Plugin {
                         cookie.put("domain", CAFEYN_DOMAIN);
                         cookie.put("path", "/");
                         cookieArray.put(cookie);
-
-                        // Fallback token extraction from cookie if not in URL
-                        if (jwt == null && parts[0].trim().contains("Cafeyn_authtoken_V2")) {
-                            jwt = parts[1].trim();
-                            Log.i(TAG, "Extracted JWT from cookie Cafeyn_authtoken_V2");
+                    }
+                }
+                result.put("success", true);
+                result.put("cookies", cookieArray);
+                result.put("cookieHeader", cookiesStr);
+                // Also return the JWT token if available
+                String[] cookiePairs = cookiesStr.split(";");
+                for (String pair : cookiePairs) {
+                        String[] parts = pair.trim().split("=", 2);
+                        if (parts.length == 2) {
+                            result.put("jwt", parts[1].trim());
                         }
                     }
                 }
-            }
-
-            if (jwt != null) {
-                result.put("success", true);
-                result.put("jwt", jwt);
-                if (cookiesStr != null) {
-                    result.put("cookies", cookieArray);
-                    result.put("cookieHeader", cookiesStr);
-                }
-            } else {
+            } catch (JSONException e) {
                 result.put("success", false);
-                result.put("error", "No JWT token found in URL or cookies");
+                result.put("error", "Cookie parsing error: " + e.getMessage());
             }
-        } catch (JSONException e) {
+        } else {
             result.put("success", false);
-            result.put("error", "Data construction error: " + e.getMessage());
+            result.put("error", "No cookies found after login");
         }
 
         cleanup();
@@ -520,20 +471,35 @@ public class CafeynLoginPlugin extends Plugin {
         });
     }
 
+    private android.content.SharedPreferences getEncryptedPrefs(Context ctx) throws GeneralSecurityException, IOException {
+        return getEncryptedPrefs(ctx, "cafeyn_encrypted");
+    }
+
+    private android.content.SharedPreferences getEncryptedPrefs(Context ctx, String name) throws GeneralSecurityException, IOException {
+        MasterKey masterKey = new MasterKey.Builder(ctx)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build();
+        return EncryptedSharedPreferences.create(
+            ctx,
+            name,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        );
+    }
+
     @PluginMethod()
     public void saveCredentials(PluginCall call) {
         String username = call.getString("username", "");
         String password = call.getString("password", "");
 
         try {
-            android.content.SharedPreferences prefs = android.content.SharedPreferences.class.cast(
-                getContext().getSharedPreferences("cafeyn_credentials", android.content.Context.MODE_PRIVATE)
-            );
+            android.content.SharedPreferences prefs = getEncryptedPrefs(getContext());
             prefs.edit()
                 .putString("cafeyn_username", username)
                 .putString("cafeyn_password", password)
                 .apply();
-            Log.i(TAG, "saveCredentials: identifiants Cafeyn enregistrés de manière sécurisée");
+            Log.d(TAG, "saveCredentials: identifiants Cafeyn enregistrés via EncryptedSharedPreferences");
 
             JSObject result = new JSObject();
             result.put("success", true);
@@ -550,10 +516,10 @@ public class CafeynLoginPlugin extends Plugin {
     @PluginMethod()
     public void getCredentials(PluginCall call) {
         try {
-            android.content.SharedPreferences prefs = getContext().getSharedPreferences("cafeyn_credentials", android.content.Context.MODE_PRIVATE);
+            android.content.SharedPreferences prefs = getEncryptedPrefs(getContext());
             String username = prefs.getString("cafeyn_username", "");
             String password = prefs.getString("cafeyn_password", "");
-            Log.i(TAG, "getCredentials: lecture OK, username=" + (username.isEmpty() ? "(vide)" : "(présent)"));
+            Log.d(TAG, "getCredentials: lecture OK, username=" + (username.isEmpty() ? "(vide)" : "(présent)"));
 
             JSObject result = new JSObject();
             result.put("success", true);
@@ -572,15 +538,80 @@ public class CafeynLoginPlugin extends Plugin {
     @PluginMethod()
     public void clearCredentials(PluginCall call) {
         try {
-            getContext().getSharedPreferences("cafeyn_credentials", android.content.Context.MODE_PRIVATE)
-                .edit().clear().apply();
-            Log.i(TAG, "clearCredentials: identifiants Cafeyn supprimés");
+            getEncryptedPrefs(getContext()).edit().clear().apply();
+            Log.d(TAG, "clearCredentials: identifiants Cafeyn supprimés");
 
             JSObject result = new JSObject();
             result.put("success", true);
             call.resolve(result);
         } catch (Exception e) {
             Log.e(TAG, "clearCredentials error", e);
+            JSObject result = new JSObject();
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            call.resolve(result);
+        }
+    }
+
+    // ===== JWT STORAGE =====
+
+    @PluginMethod()
+    public void saveJwt(PluginCall call) {
+        String token = call.getString("token", "");
+        String expiry = call.getString("expiry", "");
+
+        try {
+            android.content.SharedPreferences prefs = getEncryptedPrefs(getContext(), JWT_PREFS_NAME);
+            prefs.edit()
+                .putString(JWT_KEY, token)
+                .putString(JWT_EXPIRY_KEY, expiry)
+                .apply();
+            Log.d(TAG, "saveJwt: JWT Cafeyn enregistré");
+
+            JSObject result = new JSObject();
+            result.put("success", true);
+            call.resolve(result);
+        } catch (Exception e) {
+            Log.e(TAG, "saveJwt error", e);
+            JSObject result = new JSObject();
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            call.resolve(result);
+        }
+    }
+
+    @PluginMethod()
+    public void getJwt(PluginCall call) {
+        try {
+            android.content.SharedPreferences prefs = getEncryptedPrefs(getContext(), JWT_PREFS_NAME);
+            String token = prefs.getString(JWT_KEY, "");
+            String expiry = prefs.getString(JWT_EXPIRY_KEY, "");
+
+            JSObject result = new JSObject();
+            result.put("success", true);
+            result.put("token", token);
+            result.put("expiry", expiry);
+            call.resolve(result);
+        } catch (Exception e) {
+            Log.e(TAG, "getJwt error", e);
+            JSObject result = new JSObject();
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            call.resolve(result);
+        }
+    }
+
+    @PluginMethod()
+    public void clearJwt(PluginCall call) {
+        try {
+            getEncryptedPrefs(getContext(), JWT_PREFS_NAME).edit().clear().apply();
+            Log.d(TAG, "clearJwt: JWT Cafeyn supprimé");
+
+            JSObject result = new JSObject();
+            result.put("success", true);
+            call.resolve(result);
+        } catch (Exception e) {
+            Log.e(TAG, "clearJwt error", e);
             JSObject result = new JSObject();
             result.put("success", false);
             result.put("error", e.getMessage());
