@@ -210,6 +210,7 @@ public class CafeynLoginPlugin extends Plugin {
                 // Also return the JWT token if available
                 String[] cookiePairs = cookiesStr.split(";");
                 for (String pair : cookiePairs) {
+                    if (pair.contains("Cafeyn_authtoken_V2")) {
                         String[] parts = pair.trim().split("=", 2);
                         if (parts.length == 2) {
                             result.put("jwt", parts[1].trim());
