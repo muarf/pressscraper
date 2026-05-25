@@ -61,13 +61,13 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 85vh;
-    background: rgba(26, 26, 46, 0.8);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: color-mix(in srgb, var(--bg-secondary) 85%, transparent);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--border);
     border-radius: 24px;
     padding: 24px;
-    box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.3);
     position: relative;
     overflow: hidden;
 }
@@ -136,7 +136,7 @@ body {
     font-weight: 700;
     margin-bottom: 8px;
     text-align: center;
-    color: #fff;
+    color: var(--text-primary);
 }
 .onboarding-slide .subtitle {
     font-size: 13px;
@@ -268,7 +268,7 @@ body {
     font-size: 13px;
     font-weight: 600;
     margin-bottom: 2px;
-    color: #fff;
+    color: var(--text-primary);
 }
 .method-item .method-details p {
     font-size: 11px;

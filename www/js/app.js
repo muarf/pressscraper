@@ -451,6 +451,75 @@
         }
     };
 
+    window.onboardTestCafeyn = async function() {
+        const token = document.getElementById('onboardCafeynToken').value.trim();
+        const username = document.getElementById('onboardCafeynUser').value.trim();
+        const password = document.getElementById('onboardCafeynPass').value;
+        const errorEl = document.getElementById('onboardCafeynError');
+        const successEl = document.getElementById('onboardCafeynSuccess');
+        const btn = document.getElementById('onboardCafeynTestBtn');
+
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
+
+        if (token && token.startsWith('eyJ')) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vérification...';
+            try {
+                await window.Cafeyn.saveToken(token);
+                if (window.Cafeyn.isTokenValid()) {
+                    state.cafeynJwt = token;
+                    successEl.textContent = 'Token JWT valide !';
+                    successEl.style.display = 'block';
+                    setTimeout(() => nextOnboardingSlide(), 1000);
+                } else {
+                    errorEl.textContent = 'Token invalide ou expiré';
+                    errorEl.style.display = 'block';
+                }
+            } catch(e) {
+                errorEl.textContent = 'Erreur: ' + e.message;
+                errorEl.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-key"></i> Tester et enregistrer la connexion';
+            }
+            return;
+        }
+
+        if (!username || !password) {
+            errorEl.textContent = 'Entrez vos identifiants GPSEA ou un token JWT';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connexion...';
+        try {
+            const result = await nativeCafeynLogin(username, password);
+            if (result.success && result.jwt) {
+                await window.Cafeyn.saveToken(result.jwt);
+                state.cafeynUsername = username;
+                state.cafeynPassword = password;
+                state.cafeynJwt = result.jwt;
+                state.cafeynCookies = result.cookies || null;
+                state.cafeynCookiesHeader = result.cookieHeader || null;
+                save();
+                successEl.textContent = 'Connexion Cafeyn réussie !';
+                successEl.style.display = 'block';
+                setTimeout(() => nextOnboardingSlide(), 1000);
+            } else {
+                errorEl.textContent = result.error || 'Échec de connexion';
+                errorEl.style.display = 'block';
+            }
+        } catch(e) {
+            errorEl.textContent = 'Erreur: ' + e.message;
+            errorEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-key"></i> Tester et enregistrer la connexion';
+        }
+    };
+
     window.finishOnboarding = function() {
         const bpcActive = document.getElementById('onboardDirectToggle').checked;
         const prActive = document.getElementById('onboardPressreaderToggle').checked;
