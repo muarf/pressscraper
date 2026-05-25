@@ -69,7 +69,7 @@
                 }
                 Object.assign(state, parsed);
             }
-        } catch(e) {}
+        } catch(e) { console.warn('[APP] loadState parse error:', e); }
     }
 
     function save() {
@@ -137,7 +137,7 @@
                             });
                             console.log('[CREDS] Migration localStorage → EncryptedSharedPreferences OK');
                         }
-                    } catch(e) {}
+                    } catch(e) { console.warn('[CREDS] Cafeyn.getCredentials inner error:', e); }
                 }
             } catch(e) {
                 console.warn('[CREDS] getCredentials failed, fallback localStorage:', e);
@@ -149,7 +149,7 @@
                         if (parsed.bnfUsername) state.bnfUsername = parsed.bnfUsername;
                         if (parsed.bnfPassword) state.bnfPassword = parsed.bnfPassword;
                     }
-                } catch(e2) {}
+                } catch(e2) { console.warn('[CREDS] localStorage fallback parse error:', e2); }
             }
         } else {
             // Hors contexte natif Android : fallback localStorage (ne devrait pas arriver en prod)
@@ -160,7 +160,7 @@
                     if (parsed.bnfUsername) state.bnfUsername = parsed.bnfUsername;
                     if (parsed.bnfPassword) state.bnfPassword = parsed.bnfPassword;
                 }
-            } catch(e) {}
+            } catch(e) { console.warn('[CREDS] localStorage parse error:', e); }
         }
 
         // 2b. Charger les identifiants Cafeyn depuis le stockage sécurisé
@@ -295,7 +295,7 @@
         await loadLocalHistory();
         updateSettingsUI();
         if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.BnfLogin) {
-            try { await window.Capacitor.Plugins.BnfLogin.requestNotificationPermission(); } catch(e) {}
+            try { await window.Capacitor.Plugins.BnfLogin.requestNotificationPermission(); } catch(e) { console.warn('[APP] requestNotificationPermission failed:', e); }
         }
     }
 
@@ -417,7 +417,7 @@
         if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.BnfLogin) {
             try {
                 await window.Capacitor.Plugins.BnfLogin.showNotification({ title, body, articleId: articleId || '' });
-            } catch(e) {}
+            } catch(e) { console.warn('[APP] showNotification failed:', e); }
         }
     }
 
@@ -704,9 +704,9 @@
                     url: articleUrl,
                     dialogTitle: 'Partager l\'article'
                 });
-            } catch(e) {}
+            } catch(e) { console.warn('[APP] Capacitor.Share failed:', e); }
         } else if (navigator.share) {
-            try { await navigator.share({ title: articleTitle, text: shareText, url: articleUrl }); } catch(e) {}
+            try { await navigator.share({ title: articleTitle, text: shareText, url: articleUrl }); } catch(e) { console.warn('[APP] navigator.share failed:', e); }
         } else {
             try {
                 await navigator.clipboard.writeText(shareText);
@@ -842,7 +842,7 @@
             if (state.bpcLastUpdated) {
                 try {
                     dateStr = ' (' + new Date(state.bpcLastUpdated).toLocaleDateString() + ')';
-                } catch(e) {}
+                } catch(e) { console.warn('[APP] BPC date parse error:', e); }
             }
             text.textContent = 'Règles distantes actives' + dateStr;
         } else {
@@ -1132,7 +1132,7 @@
 
     window.clearCache = async function() {
         if (!confirm('Supprimer tous les articles sauvegardés ?')) return;
-        try { await window.DB.clearAllArticlesFromDb(); } catch(e) {}
+        try { await window.DB.clearAllArticlesFromDb(); } catch(e) { console.warn('[APP] clearAllArticlesFromDb failed:', e); }
         state.history = [];
         save();
         renderHistory();
