@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         // Register custom plugins before super.onCreate
         registerPlugin(BnfLoginPlugin.class);
+        registerPlugin(CafeynLoginPlugin.class);
         registerPlugin(IntentForwarderPlugin.class);
         registerPlugin(BackgroundPollPlugin.class);
 
