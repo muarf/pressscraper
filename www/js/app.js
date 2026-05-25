@@ -648,7 +648,7 @@
 
             switchScreen('articleScreen');
             document.getElementById('viewerArticleTitle').textContent = article.title || 'Article';
-            document.getElementById('articleContent').innerHTML = article.html_content || '<p>Contenu indisponible</p>';
+            document.getElementById('articleContent').innerHTML = DOMPurify.sanitize(article.html_content || '<p>Contenu indisponible</p>');
             state.currentArticleId = articleId;
         } catch(e) {
             toast('Erreur: ' + e.message, 'error');
@@ -686,7 +686,7 @@
         const articleUrl = article.url || '';
 
         const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = article.html_content || '';
+        tempDiv.innerHTML = DOMPurify.sanitize(article.html_content || '');
         tempDiv.querySelectorAll('style').forEach(s => s.remove());
         const plainText = tempDiv.innerText || tempDiv.textContent || '';
         const shareText = plainText || articleTitle;
@@ -723,7 +723,7 @@
             if (!article) return;
 
             const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = article.html_content || '';
+            tempDiv.innerHTML = DOMPurify.sanitize(article.html_content || '');
             tempDiv.querySelectorAll('style').forEach(s => s.remove());
             const plainText = tempDiv.innerText || tempDiv.textContent || '';
 
