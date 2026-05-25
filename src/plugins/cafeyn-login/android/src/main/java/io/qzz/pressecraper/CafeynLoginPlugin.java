@@ -1,11 +1,15 @@
 package io.qzz.pressecraper;
 
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
+import androidx.security.crypto.EncryptedSharedPreferences;
+import androidx.security.crypto.MasterKey;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -17,6 +21,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -463,20 +469,31 @@ public class CafeynLoginPlugin extends Plugin {
         });
     }
 
+    private android.content.SharedPreferences getEncryptedPrefs(Context ctx) throws GeneralSecurityException, IOException {
+        MasterKey masterKey = new MasterKey.Builder(ctx)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build();
+        return EncryptedSharedPreferences.create(
+            ctx,
+            "cafeyn_credentials_encrypted",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        );
+    }
+
     @PluginMethod()
     public void saveCredentials(PluginCall call) {
         String username = call.getString("username", "");
         String password = call.getString("password", "");
 
         try {
-            android.content.SharedPreferences prefs = android.content.SharedPreferences.class.cast(
-                getContext().getSharedPreferences("cafeyn_credentials", android.content.Context.MODE_PRIVATE)
-            );
+            android.content.SharedPreferences prefs = getEncryptedPrefs(getContext());
             prefs.edit()
                 .putString("cafeyn_username", username)
                 .putString("cafeyn_password", password)
                 .apply();
-            Log.d(TAG, "saveCredentials: identifiants Cafeyn enregistrés de manière sécurisée");
+            Log.d(TAG, "saveCredentials: identifiants Cafeyn enregistrés via EncryptedSharedPreferences");
 
             JSObject result = new JSObject();
             result.put("success", true);
@@ -493,7 +510,7 @@ public class CafeynLoginPlugin extends Plugin {
     @PluginMethod()
     public void getCredentials(PluginCall call) {
         try {
-            android.content.SharedPreferences prefs = getContext().getSharedPreferences("cafeyn_credentials", android.content.Context.MODE_PRIVATE);
+            android.content.SharedPreferences prefs = getEncryptedPrefs(getContext());
             String username = prefs.getString("cafeyn_username", "");
             String password = prefs.getString("cafeyn_password", "");
             Log.d(TAG, "getCredentials: lecture OK, username=" + (username.isEmpty() ? "(vide)" : "(présent)"));
@@ -515,8 +532,7 @@ public class CafeynLoginPlugin extends Plugin {
     @PluginMethod()
     public void clearCredentials(PluginCall call) {
         try {
-            getContext().getSharedPreferences("cafeyn_credentials", android.content.Context.MODE_PRIVATE)
-                .edit().clear().apply();
+            getEncryptedPrefs(getContext()).edit().clear().apply();
             Log.d(TAG, "clearCredentials: identifiants Cafeyn supprimés");
 
             JSObject result = new JSObject();
