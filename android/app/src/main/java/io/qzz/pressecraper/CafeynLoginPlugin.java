@@ -118,21 +118,41 @@ public class CafeynLoginPlugin extends Plugin {
                 Log.i(TAG, "Cookies for GPSEA: " + (gpseaCookies != null ? gpseaCookies : "null"));
                 Log.i(TAG, "Cookies for Cafeyn: " + (cafeynCookies != null ? cafeynCookies : "null"));
 
-                // If on GPSEA Cafeyn module page, print HTML to see redirect/iframe details
-                if (url.contains("modules/cafeyn")) {
-                    view.evaluateJavascript(
-                        "(function() { return document.documentElement.outerHTML; })()",
-                        html -> {
-                            Log.i(TAG, "HTML of modules/cafeyn: " + (html != null && html.length() > 2000 ? html.substring(0, 2000) + "..." : html));
-                        }
-                    );
+                boolean hasToken = false;
+                if (gpseaCookies != null && gpseaCookies.contains("Cafeyn_authtoken_V2")) {
+                    hasToken = true;
+                }
+                if (cafeynCookies != null && cafeynCookies.contains("Cafeyn_authtoken_V2")) {
+                    hasToken = true;
                 }
 
-                // Check if redirected to cafeyn (login succeeded)
-                if (url.contains("cafeyn") && !url.contains("login")) {
-                    // Let's print the cookies in detail first
+                // Check if redirected to cafeyn.co (login succeeded)
+                if (hasToken || (url.contains("cafeyn.co") && !url.contains("login"))) {
                     handleLoginSuccess(url);
                     return;
+                }
+
+                // If on GPSEA Cafeyn module page (but not the login page with redirect param)
+                if (url.contains("modules/cafeyn") && !url.contains("auth/login")) {
+                    String jsCode =
+                        "(function() {" +
+                        "  if (document.getElementById('anubis_challenge') || document.title.indexOf('robot') !== -1) {" +
+                        "    return JSON.stringify({ type: 'challenge' });" +
+                        "  }" +
+                        "  var link = document.querySelector(\"a[href*='cafeyn.co'], a[href*='modules/cafeyn/']\");" +
+                        "  if (link && link.href !== window.location.href) {" +
+                        "    var href = link.href;" +
+                        "    window.location.href = href;" +
+                        "    return JSON.stringify({ type: 'portal_redirecting', href: href });" +
+                        "  }" +
+                        "  var allLinks = Array.from(document.querySelectorAll('a')).map(a => ({ text: a.textContent.trim(), href: a.href }));" +
+                        "  return JSON.stringify({ type: 'portal', title: document.title, links: allLinks });" +
+                        "})()";
+
+                    view.evaluateJavascript(jsCode, resultStr -> {
+                        Log.i(TAG, "Portal page analysis: " + resultStr);
+                    });
+                    return; // Do not destroy webview, wait for redirect or user interaction
                 }
 
                 // Check for login errors
@@ -190,6 +210,18 @@ public class CafeynLoginPlugin extends Plugin {
             timeoutHandler.removeCallbacks(timeoutRunnable);
         }
 
+        // Try to extract token from URL query parameters first
+        String jwt = null;
+        try {
+            android.net.Uri uri = android.net.Uri.parse(url);
+            jwt = uri.getQueryParameter("token");
+            if (jwt != null) {
+                Log.i(TAG, "Extracted JWT from URL parameter: " + jwt.substring(0, Math.min(50, jwt.length())) + "...");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Error parsing URL for token parameter: " + e.getMessage());
+        }
+
         CookieManager cookieManager = CookieManager.getInstance();
         String cookiesStr = cookieManager.getCookie(url); // Get cookies from the actual redirected URL (GPSEA module page or Cafeyn)
         if (cookiesStr == null || cookiesStr.isEmpty()) {
@@ -203,9 +235,9 @@ public class CafeynLoginPlugin extends Plugin {
 
         JSObject result = new JSObject();
 
-        if (cookiesStr != null && !cookiesStr.isEmpty()) {
-            try {
-                JSONArray cookieArray = new JSONArray();
+        try {
+            JSONArray cookieArray = new JSONArray();
+            if (cookiesStr != null && !cookiesStr.isEmpty()) {
                 String[] pairs = cookiesStr.split(";");
                 for (String pair : pairs) {
                     String[] parts = pair.trim().split("=", 2);
@@ -216,27 +248,30 @@ public class CafeynLoginPlugin extends Plugin {
                         cookie.put("domain", CAFEYN_DOMAIN);
                         cookie.put("path", "/");
                         cookieArray.put(cookie);
-                    }
-                }
-                result.put("success", true);
-                result.put("cookies", cookieArray);
-                result.put("cookieHeader", cookiesStr);
-                // Also return the JWT token if available
-                for (String pair : pairs) {
-                    if (pair.contains("Cafeyn_authtoken_V2")) {
-                        String[] parts = pair.trim().split("=", 2);
-                        if (parts.length == 2) {
-                            result.put("jwt", parts[1].trim());
+
+                        // Fallback token extraction from cookie if not in URL
+                        if (jwt == null && parts[0].trim().contains("Cafeyn_authtoken_V2")) {
+                            jwt = parts[1].trim();
+                            Log.i(TAG, "Extracted JWT from cookie Cafeyn_authtoken_V2");
                         }
                     }
                 }
-            } catch (JSONException e) {
-                result.put("success", false);
-                result.put("error", "Cookie parsing error: " + e.getMessage());
             }
-        } else {
+
+            if (jwt != null) {
+                result.put("success", true);
+                result.put("jwt", jwt);
+                if (cookiesStr != null) {
+                    result.put("cookies", cookieArray);
+                    result.put("cookieHeader", cookiesStr);
+                }
+            } else {
+                result.put("success", false);
+                result.put("error", "No JWT token found in URL or cookies");
+            }
+        } catch (JSONException e) {
             result.put("success", false);
-            result.put("error", "No cookies found after login");
+            result.put("error", "Data construction error: " + e.getMessage());
         }
 
         cleanup();
