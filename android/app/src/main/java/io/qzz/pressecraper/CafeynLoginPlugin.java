@@ -158,11 +158,11 @@ public class CafeynLoginPlugin extends Plugin {
                         "    u.value = '" + safeUsername + "';" +
                         "    u.dispatchEvent(new Event('input', {bubbles: true}));" +
                         "    u.dispatchEvent(new Event('change', {bubbles: true}));" +
+                        "    u.dispatchEvent(new Event('blur', {bubbles: true}));" +
                         "    p.value = '" + safePassword + "';" +
                         "    p.dispatchEvent(new Event('input', {bubbles: true}));" +
                         "    p.dispatchEvent(new Event('change', {bubbles: true}));" +
-                        "    var btn = form.querySelector(\"input[type='submit'], button[type='submit'], button.submit, .btn-primary, .btn, [type='submit']\");" +
-                        "    if (btn) { btn.click(); return 'submitted'; }" +
+                        "    p.dispatchEvent(new Event('blur', {bubbles: true}));" +
                         "    form.submit(); return 'submitted';" +
                         "  }" +
                         "  return 'no_fields';" +
