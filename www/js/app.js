@@ -40,6 +40,7 @@
         bpcRulesUpdated: false,
         bpcLastUpdated: '',
         onboardingSkipped: false,
+        pressReaderReferer: 'https://mabm.toulouse-metropole.fr/default/presse.aspx?_lg=fr-FR',
         theme: 'dark',
         articleFontSize: 16
     };
@@ -89,9 +90,14 @@
             bpcRulesUpdated: state.bpcRulesUpdated || false,
             bpcLastUpdated: state.bpcLastUpdated || '',
             onboardingSkipped: state.onboardingSkipped || false,
+            pressReaderReferer: state.pressReaderReferer || 'https://mabm.toulouse-metropole.fr/default/presse.aspx?_lg=fr-FR',
             history: state.history.map(h => ({
                 id: h.id, title: h.title, url: h.url,
-                source: h.source || h.site_source || '', date: h.date
+                source: h.source || h.site_source || '',
+                date: h.date,
+                publishedDate: h.publishedDate || '',
+                author: h.author || '',
+                serviceUsed: h.serviceUsed || ''
             }))
         }));
 
@@ -176,7 +182,16 @@
             }
         }
 
-        // 3. Décider quel écran afficher
+        // 3. Vérifier les mises à jour
+        if (typeof window.Updater !== 'undefined' && typeof window.Capacitor !== 'undefined') {
+            window.Updater.checkForUpdates(false).then(() => {
+                if (window.Updater.state.available) {
+                    showUpdatePrompt();
+                }
+            });
+        }
+
+        // 4. Décider quel écran afficher
         // Appliquer le thème et la taille de police
         window.setTheme(state.theme || 'dark');
         applyFontSize(state.articleFontSize || 16);
@@ -205,6 +220,63 @@
 
     window.toggleOnboardBnfFields = function(visible) {
         document.getElementById('onboardBnfFields').style.display = visible ? 'block' : 'none';
+    };
+
+    window.selectTheme = function(theme) {
+        state.theme = theme;
+        window.setTheme(theme);
+        document.querySelectorAll('.theme-option').forEach(el => {
+            const val = el.getAttribute('data-theme-val');
+            if (val === theme) {
+                el.style.borderColor = 'var(--accent)';
+                el.style.boxShadow = '0 0 8px rgba(233,69,96,0.3)';
+            } else {
+                el.style.borderColor = 'var(--border)';
+                el.style.boxShadow = 'none';
+            }
+        });
+    };
+
+    window.onboardInstallBpc = async function() {
+        const btn = document.getElementById('onboardBpcInstallBtn');
+        const status = document.getElementById('onboardBpcStatus');
+        if (!btn || !status) return;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installation...';
+        status.textContent = 'Téléchargement des règles BPC...';
+
+        try {
+            const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
+            if (typeof window.Capacitor !== 'undefined' && BnfLogin && typeof BnfLogin.downloadAndExtractBpcRules === 'function') {
+                const res = await BnfLogin.downloadAndExtractBpcRules();
+                if (!res || !res.success) {
+                    throw new Error(res?.error || 'Erreur téléchargement');
+                }
+                localStorage.setItem('bpc_sites_js', res.sites_js);
+                localStorage.setItem('bpc_script_js', res.script_js);
+                localStorage.setItem('bpc_script_fr_js', res.script_fr_js);
+            } else {
+                throw new Error("L'installation des règles BPC nécessite l'application mobile.");
+            }
+
+            state.bpcRulesUpdated = true;
+            state.bpcLastUpdated = new Date().toISOString();
+            save();
+
+            if (window.Scraper && typeof window.Scraper.initBpc === 'function') {
+                await window.Scraper.initBpc();
+            }
+
+            status.textContent = 'Règles BPC installées avec succès !';
+            status.style.color = 'var(--success)';
+            btn.innerHTML = '<i class="fas fa-check"></i> Installé';
+        } catch(e) {
+            console.error('[BPC] Install failed:', e);
+            status.textContent = 'Échec: ' + e.message;
+            status.style.color = 'var(--accent)';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-download"></i> Installer les règles BPC';
+        }
     };
 
     window.goToOnboardingSlide = function(index) {
@@ -286,6 +358,22 @@
         document.getElementById('onboardPressreaderToggle').checked = state.providerEnabled.pressreader !== false;
         document.getElementById('onboardCafeynToggle').checked = state.providerEnabled.cafeyn !== false;
         document.getElementById('onboardBnfToggle').checked = state.providerEnabled.bnf !== false;
+
+        // Theme picker
+        document.querySelectorAll('.theme-option').forEach(el => {
+            const val = el.getAttribute('data-theme-val');
+            if (val === state.theme) {
+                el.style.borderColor = 'var(--accent)';
+                el.style.boxShadow = '0 0 8px rgba(233,69,96,0.3)';
+            } else {
+                el.style.borderColor = 'var(--border)';
+                el.style.boxShadow = 'none';
+            }
+        });
+
+        // PR referent
+        const prRefInput = document.getElementById('onboardPrReferer');
+        if (prRefInput) prRefInput.value = state.pressReaderReferer || 'https://mabm.toulouse-metropole.fr/default/presse.aspx?_lg=fr-FR';
 
         toggleOnboardCafeynFields(state.providerEnabled.cafeyn !== false);
         toggleOnboardBnfFields(state.providerEnabled.bnf !== false);
@@ -374,6 +462,12 @@
         state.providerEnabled.pressreader = prActive;
         state.providerEnabled.cafeyn = cafeynActive;
         state.providerEnabled.bnf = bnfActive;
+
+        // PR referent
+        const prRefInput = document.getElementById('onboardPrReferer');
+        if (prRefInput && prRefInput.value.trim()) {
+            state.pressReaderReferer = prRefInput.value.trim();
+        }
 
         if (cafeynActive) {
             const cafUser = document.getElementById('onboardCafeynUser').value.trim();
@@ -573,15 +667,22 @@
                         title: scraped.title,
                         html_content: scraped.html,
                         pdf_path: pdfPath,
-                        site_source: scraped.source,
-                        date: new Date().toISOString()
+                        site_source: scraped.source || '',
+                        date: new Date().toISOString(),
+                        published_date: scraped.publishedDate || '',
+                        author: scraped.author || '',
+                        publication: scraped.publication || '',
+                        service_used: scraped.serviceUsed || ''
                     };
 
                     await window.DB.saveArticleToDb(articleRecord);
 
                     state.history.unshift({
                         id: articleId, title: scraped.title, url: scraped.url,
-                        source: scraped.source, date: articleRecord.date
+                        source: scraped.source, date: articleRecord.date,
+                        publishedDate: scraped.publishedDate || '',
+                        author: scraped.author || '',
+                        serviceUsed: scraped.serviceUsed || ''
                     });
                     if (state.history.length > 100) state.history = state.history.slice(0, 100);
                     save();
@@ -662,6 +763,20 @@
             document.getElementById('articleContent').innerHTML = DOMPurify.sanitize(article.html_content || '<p>Contenu indisponible</p>');
             applyFontSize(state.articleFontSize);
             state.currentArticleId = articleId;
+
+            // Métadonnées
+            const metaEl = document.getElementById('articleMeta');
+            const parts = [];
+            if (article.published_date) parts.push('📅 ' + new Date(article.published_date).toLocaleDateString('fr-FR') + ' ' + new Date(article.published_date).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}));
+            if (article.publication) parts.push('📰 ' + article.publication);
+            if (article.author) parts.push('✍️ ' + article.author);
+            if (article.service_used) parts.push('🔧 ' + article.service_used);
+            if (parts.length) {
+                metaEl.innerHTML = parts.join(' &nbsp;|&nbsp; ');
+                metaEl.style.display = 'block';
+            } else {
+                metaEl.style.display = 'none';
+            }
         } catch(e) {
             toast('Erreur: ' + e.message, 'error');
         }
@@ -816,7 +931,7 @@
                 <div class="icon pdf"><i class="fas fa-file-pdf"></i></div>
                 <div class="info">
                     <div class="title">${escapeHtml(item.title)}</div>
-                    <div class="meta">${item.source || ''} · ${formatDate(item.date)}</div>
+                    <div class="meta">${item.source || ''}${item.serviceUsed ? ' · ' + item.serviceUsed : ''} · ${formatDate(item.date)}</div>
                 </div>
                 <span class="badge done">OK</span>
             </div>
@@ -834,7 +949,7 @@
                 <div class="icon pdf"><i class="fas fa-file-pdf"></i></div>
                 <div class="info">
                     <div class="title">${escapeHtml(item.title)}</div>
-                    <div class="meta">${item.source || ''} · ${formatDate(item.date)}</div>
+                    <div class="meta">${item.source || ''}${item.serviceUsed ? ' · ' + item.serviceUsed : ''} · ${formatDate(item.date)}</div>
                 </div>
                 <span class="badge done">OK</span>
             </div>
@@ -853,7 +968,22 @@
         const toggle = document.getElementById('directScrapingToggle');
         if (toggle) toggle.checked = (state.directScrapingEnabled !== false);
         updateBpcStatusUI();
+
+        // PR referent
+        const prRefInput = document.getElementById('settingsPrReferer');
+        if (prRefInput) prRefInput.value = state.pressReaderReferer || 'https://mabm.toulouse-metropole.fr/default/presse.aspx?_lg=fr-FR';
     }
+
+    window.savePrReferer = function() {
+        const input = document.getElementById('settingsPrReferer');
+        if (!input || !input.value.trim()) {
+            toast('Entrez une URL de référent valide', 'error');
+            return;
+        }
+        state.pressReaderReferer = input.value.trim();
+        save();
+        toast('Référent PressReader enregistré !', 'success');
+    };
 
     function updateBpcStatusUI() {
         const dot = document.getElementById('bpcRulesDot');
@@ -870,7 +1000,7 @@
             text.textContent = 'Règles distantes actives' + dateStr;
         } else {
             dot.className = 'dot none';
-            text.textContent = 'Règles locales actives';
+            text.textContent = 'Non installé';
         }
     }
 
@@ -1160,6 +1290,43 @@
             if (display) display.textContent = '';
         }
     }
+
+    // ===== AUTO-UPDATE =====
+    window.showUpdatePrompt = function() {
+        const latest = window.Updater.state.latestVersion;
+        const toastEl = document.getElementById('toast');
+        document.getElementById('toastText').innerHTML = `Mise à jour disponible : ${latest} <span style="text-decoration:underline;cursor:pointer;font-weight:700;" onclick="applyUpdate()">Télécharger</span>`;
+        toastEl.className = 'toast show';
+        clearTimeout(window._toastTimer);
+    };
+
+    window.applyUpdate = async function() {
+        const toastEl = document.getElementById('toast');
+        toastEl.classList.remove('show');
+        toast('Téléchargement de la mise à jour...', '');
+        try {
+            await window.Updater.downloadAndInstall();
+            toast('Installation en cours...', 'success');
+        } catch(e) {
+            toast('Échec: ' + e.message, 'error');
+        }
+    };
+
+    window.manualUpdateCheck = async function() {
+        const statusEl = document.getElementById('updateStatusText');
+        statusEl.textContent = 'Vérification...';
+        try {
+            await window.Updater.checkForUpdates(true);
+            if (window.Updater.state.available) {
+                statusEl.textContent = 'Mise à jour disponible : ' + window.Updater.state.latestVersion;
+                showUpdatePrompt();
+            } else {
+                statusEl.textContent = 'Dernière version : ' + window.Updater.state.latestVersion + ' (à jour)';
+            }
+        } catch(e) {
+            statusEl.textContent = 'Erreur: ' + e.message;
+        }
+    };
 
     window.clearCache = async function() {
         if (!confirm('Supprimer tous les articles sauvegardés ?')) return;

@@ -7,3 +7,4 @@ android/captures/
 android/local.properties
 .DS_Store
 *.local
+www/js/bpc/

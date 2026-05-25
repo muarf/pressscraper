@@ -318,6 +318,7 @@ body {
     word-break: break-all;
 }
 
+.theme-option:hover { opacity: 0.85; transform: scale(0.97); }
 .summary-card {
     background: rgba(0, 210, 211, 0.05);
     border: 1px solid rgba(0, 210, 211, 0.2);

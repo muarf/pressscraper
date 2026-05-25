@@ -986,6 +986,122 @@ public class BnfLoginPlugin extends Plugin {
         }).start();
     }
 
+    // ===== AUTO-UPDATE =====
+
+    @PluginMethod()
+    public void getAppVersion(PluginCall call) {
+        try {
+            String versionName = getContext().getPackageManager()
+                .getPackageInfo(getContext().getPackageName(), 0).versionName;
+            int versionCode = getContext().getPackageManager()
+                .getPackageInfo(getContext().getPackageName(), 0).versionCode;
+            JSObject result = new JSObject();
+            result.put("versionName", versionName);
+            result.put("versionCode", versionCode);
+            call.resolve(result);
+        } catch (Exception e) {
+            JSObject result = new JSObject();
+            result.put("error", e.getMessage());
+            call.resolve(result);
+        }
+    }
+
+    @PluginMethod()
+    public void downloadApk(PluginCall call) {
+        String urlStr = call.getString("url", "");
+        if (urlStr.isEmpty()) {
+            JSObject result = new JSObject();
+            result.put("error", "URL required");
+            call.resolve(result);
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                URL url = new URL(urlStr);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(30000);
+                conn.setReadTimeout(120000);
+
+                int status = conn.getResponseCode();
+                if (status != 200) {
+                    JSObject result = new JSObject();
+                    result.put("error", "HTTP " + status);
+                    call.resolve(result);
+                    return;
+                }
+
+                // Download to app cache
+                java.io.File updatesDir = new java.io.File(getContext().getCacheDir(), "updates");
+                if (!updatesDir.exists()) updatesDir.mkdirs();
+                java.io.File apkFile = new java.io.File(updatesDir, "presse-scraper-update.apk");
+                if (apkFile.exists()) apkFile.delete();
+
+                java.io.InputStream is = conn.getInputStream();
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(apkFile);
+                byte[] buffer = new byte[8192];
+                int len;
+                while ((len = is.read(buffer)) != -1) {
+                    fos.write(buffer, 0, len);
+                }
+                fos.close();
+                is.close();
+
+                JSObject result = new JSObject();
+                result.put("success", true);
+                result.put("path", apkFile.getAbsolutePath());
+                call.resolve(result);
+
+            } catch (Exception e) {
+                Log.e(TAG, "downloadApk error", e);
+                JSObject result = new JSObject();
+                result.put("error", e.getMessage());
+                call.resolve(result);
+            }
+        }).start();
+    }
+
+    @PluginMethod()
+    public void installApk(PluginCall call) {
+        String filePath = call.getString("path", "");
+        if (filePath.isEmpty()) {
+            JSObject result = new JSObject();
+            result.put("error", "Path required");
+            call.resolve(result);
+            return;
+        }
+
+        try {
+            java.io.File apkFile = new java.io.File(filePath);
+            if (!apkFile.exists()) {
+                JSObject result = new JSObject();
+                result.put("error", "Fichier APK introuvable");
+                call.resolve(result);
+                return;
+            }
+
+            Uri apkUri = FileProvider.getUriForFile(getContext(),
+                getContext().getPackageName() + ".fileprovider", apkFile);
+
+            Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+            intent.setData(apkUri);
+            intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+
+            JSObject result = new JSObject();
+            result.put("success", true);
+            call.resolve(result);
+
+        } catch (Exception e) {
+            Log.e(TAG, "installApk error", e);
+            JSObject result = new JSObject();
+            result.put("error", e.getMessage());
+            call.resolve(result);
+        }
+    }
+
     private String readEntryToString(java.util.zip.ZipInputStream zis, byte[] buffer) throws java.io.IOException {
         java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
         int len;

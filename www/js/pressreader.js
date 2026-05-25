@@ -12,13 +12,21 @@
     'use strict';
 
     const API_BASE = 'https://ingress.pressreader.com/services';
-    const HOTSPOT_REFERER = 'https://mabm.toulouse-metropole.fr/default/presse.aspx?_lg=fr-FR';
 
     let prState = {
         token: '',
         tokenExpiry: null,
         isLoggedIn: false
     };
+
+    function getReferer() {
+        try {
+            const s = JSON.parse(localStorage.getItem('presse_scraper_v3') || '{}');
+            return s.pressReaderReferer || 'https://mabm.toulouse-metropole.fr/default/presse.aspx?_lg=fr-FR';
+        } catch(e) {
+            return 'https://mabm.toulouse-metropole.fr/default/presse.aspx?_lg=fr-FR';
+        }
+    }
 
     /**
      * Tente de récupérer un bearer token d'authentification valide en activant le Hotspot.
@@ -29,20 +37,22 @@
             throw new Error("Plugin BnfLogin non disponible pour l'appel natif.");
         }
 
+        const referer = getReferer();
+
         // Appel de l'initialisation avec le referrer de la bibliothèque pour activer le hotspot
         const response = await BnfLogin.httpRequest({
             url: 'https://www.pressreader.com/authentication/v1/initialize',
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Referer': HOTSPOT_REFERER,
+                'Referer': referer,
                 'User-Agent': UA
             },
             body: JSON.stringify({
                 tickets: [],
                 language: 'fr-FR',
                 url: 'https://www.pressreader.com/',
-                urlReferrer: HOTSPOT_REFERER
+                urlReferrer: referer
             })
         });
 

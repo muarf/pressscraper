@@ -133,8 +133,12 @@
                                     return {
                                         html: finalHtml,
                                         title: pageTitle,
-                                        source: siteConfig.name + ' (BnF)',
-                                        url: originalUrl || proxyUrl
+                                        source: siteConfig.name,
+                                        url: originalUrl || proxyUrl,
+                                        publishedDate: articleData.date || '',
+                                        author: articleData.author || '',
+                                        publication: siteConfig.name,
+                                        serviceUsed: 'BnF Europresse'
                                     };
                                 }
                             }
@@ -267,8 +271,12 @@
         return {
             html: finalHtml,
             title: pageTitle,
-            source: siteConfig.name + ' (BnF)',
-            url: originalUrl || proxyUrl
+            source: siteConfig.name,
+            url: originalUrl || proxyUrl,
+            publishedDate: doc.querySelector('meta[property="article:published_time"]')?.getAttribute('content') || '',
+            author: doc.querySelector('meta[name="author"]')?.getAttribute('content') || doc.querySelector('meta[property="article:author"]')?.getAttribute('content') || '',
+            publication: siteConfig.name,
+            serviceUsed: 'BnF Europresse'
         };
     }
 
@@ -303,7 +311,7 @@
 
     /**
      * Initialise le framework BPC en chargeant sites.js, contentScript.js, contentScript_fr.js et purify.min.js
-     * (depuis le cache localStorage mis à jour, ou en fallback depuis les assets locaux).
+     * (uniquement depuis le cache localStorage — pas de fichiers embarqués).
      */
     async function initBpc() {
         try {
@@ -312,8 +320,8 @@
             // 1. Charger sites.js
             let sitesData = localStorage.getItem('bpc_sites_js');
             if (!sitesData) {
-                const res = await fetch('js/bpc/sites.js');
-                sitesData = await res.text();
+                console.warn('[BPC] Aucune règle BPC en cache. L\'utilisateur doit les installer via l\'onboarding ou les paramètres.');
+                return;
             }
 
             // Evaluer sites.js dans un Web Worker (pas d'accès window/DOM/localStorage)
@@ -323,23 +331,18 @@
             // 2. Charger contentScript.js (générique)
             bpcScript = localStorage.getItem('bpc_script_js');
             if (!bpcScript) {
-                const res = await fetch('js/bpc/contentScript.js');
-                bpcScript = await res.text();
+                console.warn('[BPC] contentScript.js manquant');
+                return;
             }
             console.log('[BPC] contentScript.js loaded. Length:', bpcScript.length);
 
             // 3. Charger contentScript_fr.js
             bpcScriptFr = localStorage.getItem('bpc_script_fr_js');
             if (!bpcScriptFr) {
-                const res = await fetch('js/bpc/contentScript_fr.js');
-                bpcScriptFr = await res.text();
+                console.warn('[BPC] contentScript_fr.js manquant');
+                return;
             }
             console.log('[BPC] contentScript_fr.js loaded. Length:', bpcScriptFr.length);
-
-            // 4. Charger purify.min.js
-            const purifyRes = await fetch('js/bpc/purify.min.js');
-            bpcPurify = await purifyRes.text();
-            console.log('[BPC] purify.min.js loaded. Length:', bpcPurify.length);
         } catch (e) {
             console.error('[BPC] Failed to initialize BPC framework:', e);
         }
@@ -612,7 +615,11 @@
                             html: finalHtml,
                             title: details.title || fallbackTitle || '',
                             source: details.publicationName || 'Cafeyn',
-                            url: titleOrUrl
+                            url: titleOrUrl,
+                            publishedDate: details.isoReleaseDate || '',
+                            author: details.authors?.map(a => a.name).join(', ') || details.author || '',
+                            publication: details.publicationName || '',
+                            serviceUsed: 'Cafeyn'
                         };
                     } else {
                         // Mode recherche par mots-clés ou URL de presse qu'on doit chercher
@@ -691,7 +698,11 @@
                             html: finalHtml,
                             title: details.title || fallbackTitle || '',
                             source: details.publicationName || 'Cafeyn',
-                            url: titleOrUrl
+                            url: titleOrUrl,
+                            publishedDate: details.isoReleaseDate || '',
+                            author: details.authors?.map(a => a.name).join(', ') || details.author || '',
+                            publication: details.publicationName || '',
+                            serviceUsed: 'Cafeyn'
                         };
                     }
                 } catch (cafeynErr) {
@@ -718,7 +729,11 @@
                             html: finalHtml,
                             title: article.title || fallbackTitle || 'Article PressReader',
                             source: article.issue?.newspaper?.name || 'PressReader',
-                            url: titleOrUrl
+                            url: titleOrUrl,
+                            publishedDate: article.date || article.issue?.date || '',
+                            author: article.author || '',
+                            publication: article.issue?.newspaper?.name || '',
+                            serviceUsed: 'PressReader'
                         };
                     } else {
                         // Soit mode recherche par mots-clés, soit URL de presse qu'on doit chercher
@@ -794,7 +809,11 @@
                             html: finalHtml,
                             title: article.title || bestMatch.title || originalTitle,
                             source: article.issue?.newspaper?.name || bestMatch.publication?.name || 'PressReader',
-                            url: isUrl ? titleOrUrl : `https://www.pressreader.com/article/${bestMatch.id}`
+                            url: isUrl ? titleOrUrl : `https://www.pressreader.com/article/${bestMatch.id}`,
+                            publishedDate: article.date || article.issue?.date || '',
+                            author: article.author || '',
+                            publication: article.issue?.newspaper?.name || bestMatch.publication?.name || '',
+                            serviceUsed: 'PressReader'
                         };
                     }
                 } catch (prErr) {
@@ -996,11 +1015,18 @@
 
                 const finalHtml = `<style>${window.PRINT_CSS}</style><h1>${cleanTitle}</h1>${cleanContent}`;
 
+                const bnfDate = docDoc.querySelector('.dateTimeArticleVisu')?.textContent?.trim() || docDoc.querySelector('meta[name="citation_date"]')?.getAttribute('content') || '';
+                const bnfAuthor = docDoc.querySelector('.auteurArticleVisu')?.textContent?.trim() || docDoc.querySelector('meta[name="citation_author"]')?.getAttribute('content') || '';
+
                 return {
                     html: finalHtml,
                     title: bestMatch.title,
                     source: bestMatch.source,
-                    url: articleUrl
+                    url: articleUrl,
+                    publishedDate: bnfDate || publishedDate || '',
+                    author: bnfAuthor || '',
+                    publication: bestMatch.source || '',
+                    serviceUsed: 'BnF Europresse'
                 };
             }
 
@@ -1027,7 +1053,24 @@
         }
 
         // Aucun fournisseur n'a pu récupérer l'article
-        throw new Error("Aucun fournisseur disponible n'a pu récupérer cet article. Vérifiez votre configuration et vos sessions.");
+        const { title: finalTitle, date: finalDate } = await getExtractedTitleAndDate();
+        let errorMsg = "Aucun fournisseur n'a pu récupérer cet article.";
+        if (finalTitle) {
+            errorMsg += ` Termes recherchés : "${finalTitle.substring(0, 60)}".`;
+        }
+        if (finalDate) {
+            try {
+                const pubDate = new Date(finalDate);
+                const diffHours = (Date.now() - pubDate.getTime()) / 3600000;
+                if (diffHours < 24) {
+                    errorMsg += " L'article vient d'être publié (moins de 24h). Il peut ne pas encore être indexé sur les services de presse. Réessayez dans quelques heures.";
+                } else {
+                    errorMsg += ` Date de publication : ${pubDate.toLocaleDateString('fr-FR')}.`;
+                }
+            } catch(e) {}
+        }
+        errorMsg += " Vérifiez votre configuration et vos sessions (token BnF/Cafeyn expiré ?).";
+        throw new Error(errorMsg);
     }
 
     /**
@@ -1626,7 +1669,11 @@
             html: finalHtml,
             title: pageTitle,
             source: sourceName,
-            url: articleUrl
+            url: articleUrl,
+            publishedDate: iframeDocument.querySelector('meta[property="article:published_time"]')?.getAttribute('content') || iframeDocument.querySelector('meta[name="publication_date"]')?.getAttribute('content') || '',
+            author: iframeDocument.querySelector('meta[name="author"]')?.getAttribute('content') || iframeDocument.querySelector('meta[property="article:author"]')?.getAttribute('content') || '',
+            publication: sourceName,
+            serviceUsed: 'BPC'
         };
     }
 
