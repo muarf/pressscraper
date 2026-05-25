@@ -524,6 +524,62 @@
         const providerEnabled = state.providerEnabled || {};
         const activeProviders = providerOrder.filter(k => providerEnabled[k] !== false);
 
+        let extractedTitle = null;
+        let extractedDate = null;
+
+        async function getExtractedTitleAndDate() {
+            if (extractedTitle !== null) {
+                return { title: extractedTitle, date: extractedDate };
+            }
+            if (!isUrl) {
+                extractedTitle = titleOrUrl;
+                extractedDate = '';
+                return { title: extractedTitle, date: extractedDate };
+            }
+
+            onProgress('Scraper', 'Récupération du titre...', 10);
+            let articleTitle = fallbackTitle || '';
+            let publishedDate = '';
+
+            if (!articleTitle) {
+                try {
+                    const pageRes = await BnfLogin.httpRequest({
+                        url: titleOrUrl,
+                        method: 'GET',
+                        headers: { 'User-Agent': UA }
+                    });
+                    if (pageRes.status === 200 && pageRes.data) {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(pageRes.data, 'text/html');
+                        articleTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')
+                            || doc.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
+                            || doc.title || '';
+                        publishedDate = doc.querySelector('meta[property="article:published_time"]')?.getAttribute('content')
+                            || doc.querySelector('meta[name="publication_date"]')?.getAttribute('content') || '';
+                    }
+                } catch (e) {
+                    console.warn('[SCRAPE] Failed to fetch original page:', e);
+                }
+            }
+
+            // Fallback : extraction depuis le slug de l'URL
+            const knownSiteNames = ['liberation.fr', 'le monde', 'le figaro'];
+            if (!articleTitle || knownSiteNames.includes(articleTitle.toLowerCase().trim())) {
+                try {
+                    const urlObj = new URL(titleOrUrl);
+                    const pathSegments = urlObj.pathname.split('/').filter(Boolean);
+                    let slug = pathSegments.pop() || '';
+                    slug = slug.replace(/\.html?$/, '');
+                    if (slug.includes('_')) slug = slug.split('_')[0];
+                    articleTitle = slug.replace(/[-]/g, ' ').replace(/\s+\d{2,}\s*$/g, '').trim();
+                } catch (e) {}
+            }
+
+            extractedTitle = articleTitle;
+            extractedDate = publishedDate;
+            return { title: extractedTitle, date: extractedDate };
+        }
+
         // ===========================================
         // === ITÉRATION PAR PRIORITÉ (providerOrder) ===
         // ===========================================
@@ -551,11 +607,91 @@
                 }
             }
 
-            if (provider === 'pressreader' && isUrl) {
-                onProgress('PressReader', 'Récupération via PressReader...', 10);
-                // TODO: Phase 2 - implémenter le scraping PressReader
-                console.log('[PressReader] Provider selected but not yet implemented');
-                continue;
+            if (provider === 'pressreader') {
+                onProgress('PressReader', 'Authentification PressReader...', 10);
+                try {
+                    let articleId = null;
+                    if (isUrl) {
+                        articleId = window.PressReader.extractArticleIdFromUrl(titleOrUrl);
+                    }
+
+                    if (articleId) {
+                        onProgress('PressReader', 'Téléchargement de l\'article...', 40);
+                        const article = await window.PressReader.fetchArticle(articleId, UA);
+                        const finalHtml = window.PressReader.articleToHtml(article);
+
+                        onProgress('PressReader', 'Succès !', 95);
+                        return {
+                            html: finalHtml,
+                            title: article.title || fallbackTitle || 'Article PressReader',
+                            source: article.issue?.newspaper?.name || 'PressReader',
+                            url: titleOrUrl
+                        };
+                    } else {
+                        // Soit mode recherche par mots-clés, soit URL de presse qu'on doit chercher
+                        let searchQuery = '';
+                        let originalTitle = '';
+                        if (isUrl) {
+                            const { title } = await getExtractedTitleAndDate();
+                            if (!title) {
+                                console.warn('[PressReader] Aucun titre extrait pour la recherche de l\'URL');
+                                continue;
+                            }
+                            originalTitle = title;
+                            searchQuery = processTitleToQuery(title) || title;
+                        } else {
+                            originalTitle = titleOrUrl;
+                            searchQuery = titleOrUrl;
+                        }
+
+                        onProgress('PressReader', `Recherche: "${searchQuery}"...`, 30);
+                        const items = await window.PressReader.search(searchQuery, UA);
+                        
+                        if (!items || items.length === 0) {
+                            console.warn('[PressReader] Aucun résultat de recherche pour :', searchQuery);
+                            continue;
+                        }
+
+                        // Trouver le meilleur match par similarité (ou par défaut le premier résultat)
+                        let bestMatch = null;
+                        let maxSim = 0;
+
+                        items.forEach(item => {
+                            if (item.id && item.title) {
+                                const sim = calculateSimilarity(originalTitle, item.title);
+                                if (sim > maxSim) {
+                                    maxSim = sim;
+                                    bestMatch = item;
+                                }
+                            }
+                        });
+
+                        // Fallback sur le premier résultat si pas de similarité forte détectée
+                        if (!bestMatch) {
+                            bestMatch = items.find(item => item.id && item.title) || items[0];
+                        }
+
+                        if (!bestMatch || !bestMatch.id) {
+                            console.warn('[PressReader] Aucun article valide trouvé dans les résultats');
+                            continue;
+                        }
+
+                        onProgress('PressReader', `Téléchargement de l'article...`, 70);
+                        const article = await window.PressReader.fetchArticle(bestMatch.id, UA);
+                        const finalHtml = window.PressReader.articleToHtml(article);
+
+                        onProgress('PressReader', 'Succès !', 95);
+                        return {
+                            html: finalHtml,
+                            title: article.title || bestMatch.title || originalTitle,
+                            source: article.issue?.newspaper?.name || bestMatch.publication?.name || 'PressReader',
+                            url: isUrl ? titleOrUrl : `https://www.pressreader.com/article/${bestMatch.id}`
+                        };
+                    }
+                } catch (prErr) {
+                    console.warn('[PressReader] Échec :', prErr.message);
+                    continue;
+                }
             }
 
             if (provider === 'bnf') {
@@ -617,52 +753,12 @@
                     continue;
                 }
 
-                let articleTitle = '';
-                let publishedDate = '';
-                let articleUrl = isUrl ? titleOrUrl : '';
-
-                // === Étape 1 : Récupération du titre ===
-                if (isUrl) {
-                    onProgress('Étape 1/5', 'Récupération du titre...', 10);
-                    articleTitle = fallbackTitle || '';
-
-                    if (!articleTitle) {
-                        try {
-                            const pageRes = await BnfLogin.httpRequest({
-                                url: articleUrl,
-                                method: 'GET',
-                                headers: { 'User-Agent': UA }
-                            });
-                            if (pageRes.status === 200 && pageRes.data) {
-                                const parser = new DOMParser();
-                                const doc = parser.parseFromString(pageRes.data, 'text/html');
-                                articleTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')
-                                    || doc.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
-                                    || doc.title || '';
-                                publishedDate = doc.querySelector('meta[property="article:published_time"]')?.getAttribute('content')
-                                    || doc.querySelector('meta[name="publication_date"]')?.getAttribute('content') || '';
-                            }
-                        } catch(e) {
-                            console.warn('[SCRAPE] Failed to fetch original page:', e);
-                        }
-                    }
-
-                    // Fallback : extraction depuis le slug de l'URL
-                    const knownSiteNames = ['liberation.fr', 'le monde', 'le figaro'];
-                    if (!articleTitle || knownSiteNames.includes(articleTitle.toLowerCase().trim())) {
-                        try {
-                            const urlObj = new URL(articleUrl);
-                            const pathSegments = urlObj.pathname.split('/').filter(Boolean);
-                            let slug = pathSegments.pop() || '';
-                            slug = slug.replace(/\.html?$/, '');
-                            if (slug.includes('_')) slug = slug.split('_')[0];
-                            articleTitle = slug.replace(/[-]/g, ' ').replace(/\s+\d{2,}\s*$/g, '').trim();
-                        } catch(e) {}
-                    }
-                } else {
-                    // Mode recherche par mots-clés
-                    articleTitle = titleOrUrl;
+                const { title: articleTitle, date: publishedDate } = await getExtractedTitleAndDate();
+                if (!articleTitle) {
+                    console.warn('[BnF] Impossible d\'obtenir le titre de l\'article, passage au suivant');
+                    continue;
                 }
+                const articleUrl = isUrl ? titleOrUrl : '';
 
                 // === Étape 2 : Construction de la requête ===
                 const query = processTitleToQuery(articleTitle);

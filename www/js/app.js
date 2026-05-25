@@ -805,15 +805,21 @@
             const isLast = i === state.providerOrder.length - 1;
             html += `
                 <div class="provider-order-item${enabled ? '' : ' disabled'}">
-                    <button class="order-btn" onclick="toggleProvider('${key}')" title="${enabled ? 'Désactiver' : 'Activer'}">
-                        ${enabled ? '✅' : '⏹️'}
+                    <button class="order-btn toggle-btn" onclick="toggleProvider('${key}')" title="${enabled ? 'Désactiver' : 'Activer'}">
+                        <i class="${enabled ? 'fas fa-check-square' : 'far fa-square'}"></i>
                     </button>
                     <span class="provider-name">${PROVIDER_LABELS[key] || key}</span>
                     <div class="order-arrows">
-                        <button class="order-btn" onclick="moveProviderUp('${key}')" ${isFirst ? 'disabled' : ''}>▲</button>
-                        <button class="order-btn" onclick="moveProviderDown('${key}')" ${isLast ? 'disabled' : ''}>▼</button>
+                        <button class="order-btn arrow-btn" onclick="moveProviderUp('${key}')" ${isFirst ? 'disabled' : ''}>
+                            <i class="fas fa-chevron-up"></i>
+                        </button>
+                        <button class="order-btn arrow-btn" onclick="moveProviderDown('${key}')" ${isLast ? 'disabled' : ''}>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
                     </div>
-                    <button class="order-btn config-btn" onclick="showProviderConfig('${key}')" title="Configurer">⚙️</button>
+                    <button class="order-btn config-btn" onclick="showProviderConfig('${key}')" title="Configurer">
+                        <i class="fas fa-cog"></i>
+                    </button>
                 </div>`;
         });
         container.innerHTML = html;
@@ -873,7 +879,11 @@
 
     // ===== CAFEYN =====
     window.reconnectCafeyn = async function() {
-        if (!state.cafeynUsername || !state.cafeynPassword) { showOnboarding({target: 'cafeyn'}); return; }
+        if (!state.cafeynUsername || !state.cafeynPassword) {
+            toast('Enregistrez d\'abord vos identifiants ci-dessous', 'error');
+            document.getElementById('cafeynUsernameInput')?.focus();
+            return;
+        }
         toast('Connexion Cafeyn via WebView...', '');
         try {
             const result = await nativeCafeynLogin(state.cafeynUsername, state.cafeynPassword);
@@ -890,6 +900,21 @@
         } catch(e) {
             toast('Erreur: ' + e.message, 'error');
         }
+    };
+
+    window.saveCafeynCredentials = function() {
+        const u = document.getElementById('cafeynUsernameInput').value.trim();
+        const p = document.getElementById('cafeynPasswordInput').value;
+        if (!u || !p) {
+            toast('Veuillez remplir l\'identifiant et le mot de passe', 'error');
+            return;
+        }
+        state.cafeynUsername = u;
+        state.cafeynPassword = p;
+        save();
+        updateCafeynStatusUI();
+        toast('Identifiants Cafeyn enregistrés !', 'success');
+        reconnectCafeyn();
     };
 
     async function nativeCafeynLogin(username, password) {
@@ -928,6 +953,12 @@
         const dot = document.getElementById('cafeynDot');
         const text = document.getElementById('cafeynText');
         const display = document.getElementById('cafeynUserDisplay');
+        
+        const uInput = document.getElementById('cafeynUsernameInput');
+        const pInput = document.getElementById('cafeynPasswordInput');
+        if (uInput && state.cafeynUsername && !uInput.value) uInput.value = state.cafeynUsername;
+        if (pInput && state.cafeynPassword && !pInput.value) pInput.value = state.cafeynPassword;
+
         if (window.Cafeyn.isTokenValid()) {
             dot.className = 'dot ok';
             const exp = new Date(window.Cafeyn.state.tokenExpiry);

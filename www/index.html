@@ -127,8 +127,19 @@
                     <span id="cafeynText">Non connecté</span>
                 </div>
                 <div id="cafeynUserDisplay" style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;padding:0 4px;"></div>
-                <button class="action-btn secondary" id="reconnectCafeynBtn" style="width:100%;margin-bottom:6px;" onclick="reconnectCafeyn()">
-                    <i class="fas fa-key"></i> Se connecter (WebView)
+                <div class="form-group" style="margin-top:8px;">
+                    <label>Identifiant Cafeyn (GPSEA)</label>
+                    <input type="text" id="cafeynUsernameInput" class="form-input" placeholder="Votre identifiant / email...">
+                </div>
+                <div class="form-group" style="margin-top:8px;">
+                    <label>Mot de passe Cafeyn (GPSEA)</label>
+                    <input type="password" id="cafeynPasswordInput" class="form-input" placeholder="Votre mot de passe...">
+                </div>
+                <button class="action-btn primary" id="saveCafeynCredsBtn" style="width:100%;margin-bottom:8px;" onclick="saveCafeynCredentials()">
+                    <i class="fas fa-save"></i> Enregistrer les identifiants
+                </button>
+                <button class="action-btn secondary" id="reconnectCafeynBtn" style="width:100%;margin-bottom:12px;" onclick="reconnectCafeyn()">
+                    <i class="fas fa-key"></i> Lancer la connexion automatique (WebView)
                 </button>
                 <div class="form-group">
                     <label>Token JWT Cafeyn (manuel)</label>
@@ -144,10 +155,13 @@
 
             <div class="settings-group" id="pressreaderProviderConfig" style="display:none;">
                 <h3>PressReader</h3>
-                <p style="font-size:13px;color:var(--text-secondary);padding:8px 4px;">
-                    ⏳ <em>Configuration PressReader à venir</em>
+                <div class="cookie-status" style="margin-bottom:8px;">
+                    <div class="dot ok"></div>
+                    <span>Hotspot automatique actif (Toulouse Métropole)</span>
+                </div>
+                <p style="font-size:12px;color:var(--text-secondary);padding:4px;line-height:1.4;">
+                    L'accès est activé automatiquement sans identifiants de connexion. L'application simule un référent bibliothèque pour déverrouiller vos articles.
                 </p>
-            </div>
             </div>
 
             <div class="settings-group" id="bpcProviderConfig" style="display:none;">
@@ -213,6 +227,7 @@
 
 <!-- Scripts : ordre de chargement important -->
 <script src="js/db.js"></script>
+<script src="js/pressreader.js"></script>
 <script src="js/scraper.js"></script>
 <script src="js/cafeyn.js"></script>
 <script src="js/app.js"></script>
