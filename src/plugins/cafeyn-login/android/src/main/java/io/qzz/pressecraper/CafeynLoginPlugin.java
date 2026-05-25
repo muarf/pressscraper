@@ -38,6 +38,9 @@ import java.net.URL;
 public class CafeynLoginPlugin extends Plugin {
 
     private static final String TAG = "CafeynLoginPlugin";
+    private static final String JWT_PREFS_NAME = "cafeyn_jwt_encrypted";
+    private static final String JWT_KEY = "cafeyn_jwt";
+    private static final String JWT_EXPIRY_KEY = "cafeyn_jwt_expiry";
     // GPSEA login URL with redirect to cafeyn
     private static final String CAFEYN_AUTH_URL = "https://mediatheques.sudestavenir.fr/auth/login?redirect=https://mediatheques.sudestavenir.fr/modules/cafeyn";
     private static final String CAFEYN_DOMAIN = "api.cafeyn.co";
@@ -470,12 +473,16 @@ public class CafeynLoginPlugin extends Plugin {
     }
 
     private android.content.SharedPreferences getEncryptedPrefs(Context ctx) throws GeneralSecurityException, IOException {
+        return getEncryptedPrefs(ctx, "cafeyn_encrypted");
+    }
+
+    private android.content.SharedPreferences getEncryptedPrefs(Context ctx, String name) throws GeneralSecurityException, IOException {
         MasterKey masterKey = new MasterKey.Builder(ctx)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build();
         return EncryptedSharedPreferences.create(
             ctx,
-            "cafeyn_credentials_encrypted",
+            name,
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
@@ -540,6 +547,72 @@ public class CafeynLoginPlugin extends Plugin {
             call.resolve(result);
         } catch (Exception e) {
             Log.e(TAG, "clearCredentials error", e);
+            JSObject result = new JSObject();
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            call.resolve(result);
+        }
+    }
+
+    // ===== JWT STORAGE =====
+
+    @PluginMethod()
+    public void saveJwt(PluginCall call) {
+        String token = call.getString("token", "");
+        String expiry = call.getString("expiry", "");
+
+        try {
+            android.content.SharedPreferences prefs = getEncryptedPrefs(getContext(), JWT_PREFS_NAME);
+            prefs.edit()
+                .putString(JWT_KEY, token)
+                .putString(JWT_EXPIRY_KEY, expiry)
+                .apply();
+            Log.d(TAG, "saveJwt: JWT Cafeyn enregistré");
+
+            JSObject result = new JSObject();
+            result.put("success", true);
+            call.resolve(result);
+        } catch (Exception e) {
+            Log.e(TAG, "saveJwt error", e);
+            JSObject result = new JSObject();
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            call.resolve(result);
+        }
+    }
+
+    @PluginMethod()
+    public void getJwt(PluginCall call) {
+        try {
+            android.content.SharedPreferences prefs = getEncryptedPrefs(getContext(), JWT_PREFS_NAME);
+            String token = prefs.getString(JWT_KEY, "");
+            String expiry = prefs.getString(JWT_EXPIRY_KEY, "");
+
+            JSObject result = new JSObject();
+            result.put("success", true);
+            result.put("token", token);
+            result.put("expiry", expiry);
+            call.resolve(result);
+        } catch (Exception e) {
+            Log.e(TAG, "getJwt error", e);
+            JSObject result = new JSObject();
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            call.resolve(result);
+        }
+    }
+
+    @PluginMethod()
+    public void clearJwt(PluginCall call) {
+        try {
+            getEncryptedPrefs(getContext(), JWT_PREFS_NAME).edit().clear().apply();
+            Log.d(TAG, "clearJwt: JWT Cafeyn supprimé");
+
+            JSObject result = new JSObject();
+            result.put("success", true);
+            call.resolve(result);
+        } catch (Exception e) {
+            Log.e(TAG, "clearJwt error", e);
             JSObject result = new JSObject();
             result.put("success", false);
             result.put("error", e.getMessage());

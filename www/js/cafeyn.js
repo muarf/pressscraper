@@ -33,7 +33,24 @@
     init();
 
     // ===== STOCKAGE TOKEN =====
-    function loadToken() {
+    async function loadToken() {
+        const nativePlugin = window.Capacitor?.Plugins?.CafeynLogin;
+        if (nativePlugin && typeof nativePlugin.getJwt === 'function') {
+            try {
+                const res = await nativePlugin.getJwt();
+                if (res.success && res.token && res.expiry) {
+                    const expiryDate = new Date(res.expiry);
+                    if (expiryDate > new Date()) {
+                        cafeynState.token = res.token;
+                        cafeynState.tokenExpiry = expiryDate;
+                        cafeynState.isLoggedIn = true;
+                        return;
+                    }
+                }
+            } catch(e) {
+                console.warn('[Cafeyn] Erreur chargement token natif:', e);
+            }
+        }
         try {
             const token = localStorage.getItem(TOKEN_KEY);
             const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
@@ -48,24 +65,45 @@
                 }
             }
         } catch(e) {
-            console.warn('[Cafeyn] Erreur chargement token:', e);
+            console.warn('[Cafeyn] Erreur chargement token localStorage:', e);
         }
     }
 
-    function saveToken(token, days = 30) {
+    async function saveToken(token, days = 30) {
         cafeynState.token = token;
         const expiry = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
         cafeynState.tokenExpiry = expiry;
         cafeynState.isLoggedIn = true;
+        const expiryStr = expiry.toISOString();
+
+        const nativePlugin = window.Capacitor?.Plugins?.CafeynLogin;
+        if (nativePlugin && typeof nativePlugin.saveJwt === 'function') {
+            try {
+                await nativePlugin.saveJwt({ token, expiry: expiryStr });
+                console.log('[Cafeyn] Token sauvegardé via plugin natif');
+                return;
+            } catch(e) {
+                console.warn('[Cafeyn] Erreur sauvegarde token natif, fallback localStorage:', e);
+            }
+        }
         localStorage.setItem(TOKEN_KEY, token);
-        localStorage.setItem(TOKEN_EXPIRY_KEY, expiry.toISOString());
-        console.log('[Cafeyn] Token sauvegardé');
+        localStorage.setItem(TOKEN_EXPIRY_KEY, expiryStr);
+        console.log('[Cafeyn] Token sauvegardé dans localStorage');
     }
 
-    function clearToken() {
+    async function clearToken() {
         cafeynState.token = '';
         cafeynState.tokenExpiry = null;
         cafeynState.isLoggedIn = false;
+
+        const nativePlugin = window.Capacitor?.Plugins?.CafeynLogin;
+        if (nativePlugin && typeof nativePlugin.clearJwt === 'function') {
+            try {
+                await nativePlugin.clearJwt();
+            } catch(e) {
+                console.warn('[Cafeyn] Erreur effacement token natif:', e);
+            }
+        }
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(TOKEN_EXPIRY_KEY);
         console.log('[Cafeyn] Token effacé');
@@ -105,7 +143,7 @@
                 }
 
                 if (response.status === 401) {
-                    clearToken();
+                    await clearToken();
                     throw new Error('Token expiré — reconnexion nécessaire');
                 }
 
@@ -126,7 +164,7 @@
                 });
 
                 if (response.status === 401) {
-                    clearToken();
+                    await clearToken();
                     throw new Error('Token expiré — reconnexion nécessaire');
                 }
 

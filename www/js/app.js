@@ -1033,7 +1033,7 @@
         try {
             const result = await nativeCafeynLogin(state.cafeynUsername, state.cafeynPassword);
             if (result.success && result.jwt) {
-                window.Cafeyn.saveToken(result.jwt);
+                await window.Cafeyn.saveToken(result.jwt);
                 state.cafeynCookies = result.cookies || null;
                 state.cafeynCookiesHeader = result.cookieHeader || null;
                 save();
@@ -1071,7 +1071,7 @@
         return result;
     }
 
-    window.saveCafeynToken = function() {
+    window.saveCafeynToken = async function() {
         const input = document.getElementById('cafeynTokenInput');
         const token = input.value.trim();
         if (!token) {
@@ -1082,14 +1082,14 @@
             toast('Token invalide (doit commencer par eyJ...)', 'error');
             return;
         }
-        window.Cafeyn.saveToken(token);
+        await window.Cafeyn.saveToken(token);
         input.value = '';
         updateCafeynStatusUI();
         toast('Token Cafeyn sauvegardé !', 'success');
     };
 
-    window.clearCafeynToken = function() {
-        window.Cafeyn.clearToken();
+    window.clearCafeynToken = async function() {
+        await window.Cafeyn.clearToken();
         updateCafeynStatusUI();
         toast('Token Cafeyn effacé', '');
     };
