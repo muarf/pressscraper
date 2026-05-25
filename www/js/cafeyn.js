@@ -75,7 +75,6 @@
         return cafeynState.isLoggedIn && new Date() < new Date(cafeynState.tokenExpiry);
     }
 
-    // ===== API CALLS =====
     async function apiCall(endpoint, options = {}) {
         if (!isTokenValid()) {
             throw new Error('Token Cafeyn expiré. Veuillez vous reconnecter.');
@@ -92,22 +91,51 @@
         const headers = { ...defaultHeaders, ...options.headers };
 
         try {
-            const response = await fetch(url, {
-                method: options.method || 'GET',
-                headers: headers,
-                body: options.body ? JSON.stringify(options.body) : undefined
-            });
+            const BnfLogin = window.Capacitor?.Plugins?.BnfLogin || window.Capacitor?.Plugins?.CafeynLogin;
+            if (BnfLogin && typeof BnfLogin.httpRequest === 'function') {
+                const response = await BnfLogin.httpRequest({
+                    url: url,
+                    method: options.method || 'GET',
+                    headers: headers,
+                    body: options.body ? JSON.stringify(options.body) : undefined
+                });
 
-            if (response.status === 401) {
-                clearToken();
-                throw new Error('Token expiré — reconnexion nécessaire');
+                if (response.error) {
+                    throw new Error(response.error);
+                }
+
+                if (response.status === 401) {
+                    clearToken();
+                    throw new Error('Token expiré — reconnexion nécessaire');
+                }
+
+                if (response.status >= 400) {
+                    throw new Error(`API error ${response.status}`);
+                }
+
+                try {
+                    return JSON.parse(response.data);
+                } catch(e) {
+                    return response.data;
+                }
+            } else {
+                const response = await fetch(url, {
+                    method: options.method || 'GET',
+                    headers: headers,
+                    body: options.body ? JSON.stringify(options.body) : undefined
+                });
+
+                if (response.status === 401) {
+                    clearToken();
+                    throw new Error('Token expiré — reconnexion nécessaire');
+                }
+
+                if (!response.ok) {
+                    throw new Error(`API error ${response.status}: ${response.statusText}`);
+                }
+
+                return await response.json();
             }
-
-            if (!response.ok) {
-                throw new Error(`API error ${response.status}: ${response.statusText}`);
-            }
-
-            return await response.json();
         } catch(e) {
             console.error('[Cafeyn] API call failed:', e);
             throw e;
@@ -116,17 +144,26 @@
 
     // ===== RECHERCHE =====
     async function search(query, options = {}) {
-        const params = {
-            from: 0,
-            size: 30,
+        const urlParams = new URLSearchParams({
+            from: options.from || 0,
+            size: options.size || 30
+        });
+
+        const body = {
             query: query,
-            country: 'fr',
-            lang: 'fr',
-            ...options
+            country: options.country || 'fr',
+            lang: options.lang || 'fr'
         };
 
         const result = await apiCall(
-            `/b2c/stores/${STORE_ID}/all/search?${new URLSearchParams(params).toString()}`
+            `/b2c/stores/${STORE_ID}/all/search?${urlParams.toString()}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: body
+            }
         );
 
         return {
@@ -240,6 +277,7 @@
         fetchPublications: fetchPublications,
         articleToHtml: articleToHtml,
         extractSlugFromUrl: extractSlugFromUrl,
+        apiCall: apiCall,
         state: cafeynState
     };
 
