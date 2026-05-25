@@ -505,8 +505,13 @@
         openBtn.style.display = 'none';
 
         let sessionRetry = false;
+        const startTime = Date.now();
+        const MAX_SCRAPE_DURATION_MS = 120_000;
         try {
             while (true) {
+                if (Date.now() - startTime > MAX_SCRAPE_DURATION_MS) {
+                    throw new Error('Timeout global de scraping dépassé (120s)');
+                }
                 // Renouvellement automatique de session si expirée localement
                 if (!areCookiesValid() && state.bnfUsername && state.bnfPassword) {
                     titleEl.textContent = 'Renouvellement de la session BnF...';
