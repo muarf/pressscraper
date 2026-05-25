@@ -15,32 +15,213 @@
 
 <!-- ONBOARDING SCREEN -->
 <div id="onboardingScreen" class="onboarding" style="display:none;">
-    <i class="fas fa-newspaper logo" style="color:var(--accent)"></i>
-    <h2>Connexion à Europresse</h2>
-    <p class="subtitle">Entrez vos identifiants BnF pour accéder aux articles.<br>Vos credentials restent sur votre appareil.</p>
-    <div class="form-group">
-        <label>Identifiant BnF</label>
-        <input type="text" id="onboardUsername" placeholder="Votre identifiant..." autocomplete="off">
-    </div>
-    <div class="form-group">
-        <label>Mot de passe BnF</label>
-        <input type="password" id="onboardPassword" placeholder="Votre mot de passe..." autocomplete="off">
-    </div>
-    <button class="btn-primary" id="onboardLoginBtn" onclick="onboardLogin()">
-        <i class="fas fa-key"></i> Se connecter
-    </button>
-    <button class="btn-secondary" id="onboardSkipBtn" onclick="skipOnboarding()">
-        Passer / Configurer plus tard
-    </button>
-    <div class="error-msg" id="onboardError"></div>
-    <div class="success-msg" id="onboardSuccess"></div>
-    <div class="links">
-        <a href="https://bnf.idm.oclc.org/login" target="_blank" onclick="openExternal(this.href); return false;">
-            <i class="fas fa-user-plus"></i> Créer un compte BnF
-        </a>
-        <a href="https://bnf.idm.oclc.org/forgot" target="_blank" onclick="openExternal(this.href); return false;">
-            <i class="fas fa-question-circle"></i> Identifiants oubliés ?
-        </a>
+    <div class="onboarding-wrapper">
+        <div class="onboarding-header">
+            <span id="onboardingStepInfo" class="step-info">Étape 1 sur 6</span>
+            <button class="skip-btn" onclick="skipOnboarding()">Passer</button>
+        </div>
+
+        <div class="onboarding-slides">
+            <!-- Slide 1: Welcome & Overview -->
+            <div class="onboarding-slide active" data-slide="0">
+                <i class="fas fa-newspaper logo" style="color:var(--accent)"></i>
+                <h2>Bienvenue sur Presse Scraper</h2>
+                <p class="subtitle">Lisez vos articles préférés en contournant les paywalls grâce à 4 méthodes complémentaires.</p>
+                
+                <div class="methods-overview">
+                    <div class="method-item">
+                        <i class="fas fa-bolt icon-direct"></i>
+                        <div class="method-details">
+                            <h4>Contournement Direct</h4>
+                            <p>Règles locales rapides sans compte.</p>
+                        </div>
+                    </div>
+                    <div class="method-item">
+                        <i class="fas fa-map-marker-alt icon-pr"></i>
+                        <div class="method-details">
+                            <h4>PressReader Hotspots</h4>
+                            <p>Accès gratuit via hotspot simulé.</p>
+                        </div>
+                    </div>
+                    <div class="method-item">
+                        <i class="fas fa-coffee icon-cafeyn"></i>
+                        <div class="method-details">
+                            <h4>Cafeyn</h4>
+                            <p>Accès via compte GPSEA ou jeton JWT.</p>
+                        </div>
+                    </div>
+                    <div class="method-item">
+                        <i class="fas fa-book-open icon-bnf"></i>
+                        <div class="method-details">
+                            <h4>BnF Europresse</h4>
+                            <p>Accès via votre abonnement BnF.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slide 2: Bypass Direct (BPC) -->
+            <div class="onboarding-slide" data-slide="1">
+                <i class="fas fa-bolt logo" style="color:#ffd32a"></i>
+                <h2>Contournement Direct (BPC)</h2>
+                <p class="subtitle">Utilise des scripts locaux pour contourner les paywalls de nombreux sites d'actualité.</p>
+                
+                <div class="onboard-card">
+                    <div class="setting-item" style="background:var(--bg-secondary); border:none; margin:0;">
+                        <span class="label">Activer cette méthode</span>
+                        <label class="switch">
+                            <input type="checkbox" id="onboardDirectToggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <p class="info-text">Aucun compte requis. Recommandé pour la presse générale française.</p>
+            </div>
+
+            <!-- Slide 3: PressReader -->
+            <div class="onboarding-slide" data-slide="2">
+                <i class="fas fa-map-marker-alt logo" style="color:#00d2d3"></i>
+                <h2>PressReader Hotspots</h2>
+                <p class="subtitle">Bénéficiez du catalogue PressReader en simulant une connexion à un point d'accès bibliothèque partenaire (ex: Toulouse Métropole).</p>
+                
+                <div class="onboard-card">
+                    <div class="setting-item" style="background:var(--bg-secondary); border:none; margin:0;">
+                        <span class="label">Activer cette méthode</span>
+                        <label class="switch">
+                            <input type="checkbox" id="onboardPressreaderToggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <p class="info-text">Aucune configuration requise. L'application simule un référent réseau pour déverrouiller les magazines et journaux.</p>
+            </div>
+
+            <!-- Slide 4: Cafeyn -->
+            <div class="onboarding-slide" data-slide="3">
+                <i class="fas fa-coffee logo" style="color:#ffa502"></i>
+                <h2>Cafeyn (GPSEA)</h2>
+                <p class="subtitle">Accédez au catalogue complet de Cafeyn. Si vous n'avez pas de compte, vous pouvez vous inscrire gratuitement.</p>
+                
+                <div class="onboard-card">
+                    <div class="setting-item" style="background:var(--bg-secondary); border:none; margin-bottom:12px;">
+                        <span class="label">Activer cette méthode</span>
+                        <label class="switch">
+                            <input type="checkbox" id="onboardCafeynToggle" checked onchange="toggleOnboardCafeynFields(this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    
+                    <div id="onboardCafeynFields">
+                        <div class="form-group">
+                            <label>Identifiant GPSEA / Cafeyn</label>
+                            <input type="text" id="onboardCafeynUser" placeholder="Votre identifiant GPSEA..." autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label>Mot de passe GPSEA / Cafeyn</label>
+                            <input type="password" id="onboardCafeynPass" placeholder="Votre mot de passe GPSEA..." autocomplete="off">
+                        </div>
+                        
+                        <div class="advanced-toggle" onclick="toggleOnboardCafeynAdvanced()">
+                            <i class="fas fa-cog"></i> Configuration jeton JWT (Avancé)
+                        </div>
+                        <div id="onboardCafeynAdvanced" style="display:none; margin-top:10px;">
+                            <div class="form-group">
+                                <label>Jeton JWT Cafeyn manuel</label>
+                                <input type="text" id="onboardCafeynToken" placeholder="eyJhbGciOi..." autocomplete="off">
+                            </div>
+                            <p class="help-desc">
+                                Pour trouver votre token : connectez-vous à Cafeyn sur PC, ouvrez DevTools (F12) > Console et tapez : <code>document.cookie.split(';').find(c => c.includes('Cafeyn_authtoken_V2')).split('=')[1]</code>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="links">
+                    <a href="https://mediatheques.sudestavenir.fr/auth/pre-registration" target="_blank" onclick="openExternal(this.href); return false;">
+                        <i class="fas fa-user-plus"></i> S'inscrire gratuitement aux Médiathèques GPSEA
+                    </a>
+                </div>
+            </div>
+
+            <!-- Slide 5: BnF Europresse -->
+            <div class="onboarding-slide" data-slide="4">
+                <i class="fas fa-book-open logo" style="color:var(--accent)"></i>
+                <h2>BnF Europresse</h2>
+                <p class="subtitle">Connectez votre compte BnF (Bibliothèque nationale de France) pour lire via Europresse.</p>
+                
+                <div class="onboard-card">
+                    <div class="setting-item" style="background:var(--bg-secondary); border:none; margin-bottom:12px;">
+                        <span class="label">Activer cette méthode</span>
+                        <label class="switch">
+                            <input type="checkbox" id="onboardBnfToggle" checked onchange="toggleOnboardBnfFields(this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+
+                    <div id="onboardBnfFields">
+                        <div class="form-group">
+                            <label>Identifiant BnF</label>
+                            <input type="text" id="onboardBnfUser" placeholder="Votre identifiant BnF..." autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label>Mot de passe BnF</label>
+                            <input type="password" id="onboardBnfPass" placeholder="Votre mot de passe BnF..." autocomplete="off">
+                        </div>
+                        <button class="btn-primary" id="onboardLoginBtn" onclick="onboardBnfLogin()" style="margin-top:6px; padding:10px;">
+                            <i class="fas fa-key"></i> Tester et enregistrer la connexion
+                        </button>
+                    </div>
+                </div>
+                <div class="error-msg" id="onboardError"></div>
+                <div class="success-msg" id="onboardSuccess"></div>
+
+                <div class="links">
+                    <a href="https://bnf.idm.oclc.org/login" target="_blank" onclick="openExternal(this.href); return false;">
+                        <i class="fas fa-user-plus"></i> Créer un compte BnF (Pass illimité à 24€/an)
+                    </a>
+                    <a href="https://bnf.idm.oclc.org/forgot" target="_blank" onclick="openExternal(this.href); return false;">
+                        <i class="fas fa-question-circle"></i> Identifiants oubliés ?
+                    </a>
+                </div>
+            </div>
+
+            <!-- Slide 6: Ready -->
+            <div class="onboarding-slide" data-slide="5">
+                <i class="fas fa-check-circle logo" style="color:var(--success)"></i>
+                <h2>C'est tout bon !</h2>
+                <p class="subtitle">Votre Presse Scraper est configuré et prêt à l'emploi.</p>
+                
+                <div class="summary-card">
+                    <p style="font-size:14px; text-align:left; line-height:1.6; margin-bottom:12px;">
+                        Les méthodes actives seront essayées dans l'ordre de priorité pour chaque article recherché ou partagé.
+                    </p>
+                    <p style="font-size:12px; color:var(--text-secondary); text-align:left; line-height:1.4;">
+                        Vous pouvez ajuster l'ordre des priorités et mettre à jour vos identifiants à tout moment dans l'onglet <strong>Paramètres</strong> de l'application.
+                    </p>
+                </div>
+
+                <button class="btn-primary" onclick="finishOnboarding()" style="margin-top:20px; max-width:100%;">
+                    <i class="fas fa-rocket"></i> Commencer la lecture
+                </button>
+            </div>
+        </div>
+
+        <div class="onboarding-footer">
+            <button class="nav-btn prev" id="onboardPrevBtn" onclick="prevOnboardingSlide()" style="visibility:hidden;">
+                <i class="fas fa-chevron-left"></i> Retour
+            </button>
+            <div class="onboarding-dots" id="onboardDots">
+                <span class="dot active" onclick="goToOnboardingSlide(0)"></span>
+                <span class="dot" onclick="goToOnboardingSlide(1)"></span>
+                <span class="dot" onclick="goToOnboardingSlide(2)"></span>
+                <span class="dot" onclick="goToOnboardingSlide(3)"></span>
+                <span class="dot" onclick="goToOnboardingSlide(4)"></span>
+                <span class="dot" onclick="goToOnboardingSlide(5)"></span>
+            </div>
+            <button class="nav-btn next" id="onboardNextBtn" onclick="nextOnboardingSlide()">
+                Suivant <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
     </div>
 </div>
 
