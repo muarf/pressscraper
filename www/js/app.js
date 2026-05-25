@@ -39,7 +39,9 @@
         directScrapingEnabled: true,
         bpcRulesUpdated: false,
         bpcLastUpdated: '',
-        onboardingSkipped: false
+        onboardingSkipped: false,
+        theme: 'dark',
+        articleFontSize: 16
     };
 
     // ===== PERSISTANCE =====
@@ -175,6 +177,10 @@
         }
 
         // 3. Décider quel écran afficher
+        // Appliquer le thème et la taille de police
+        window.setTheme(state.theme || 'dark');
+        applyFontSize(state.articleFontSize || 16);
+
         if ((!state.bnfUsername || !state.bnfPassword) && !state.onboardingSkipped) {
             showOnboarding();
         } else {
@@ -654,11 +660,26 @@
             switchScreen('articleScreen');
             document.getElementById('viewerArticleTitle').textContent = article.title || 'Article';
             document.getElementById('articleContent').innerHTML = DOMPurify.sanitize(article.html_content || '<p>Contenu indisponible</p>');
+            applyFontSize(state.articleFontSize);
             state.currentArticleId = articleId;
         } catch(e) {
             toast('Erreur: ' + e.message, 'error');
         }
     }
+
+    function applyFontSize(size) {
+        state.articleFontSize = size;
+        document.documentElement.style.setProperty('--article-font-size', size + 'px');
+        document.getElementById('fontSizeLabel').textContent = size;
+        save();
+    }
+
+    window.changeFontSize = function(delta) {
+        let size = state.articleFontSize + delta;
+        if (size < 10) size = 10;
+        if (size > 32) size = 32;
+        applyFontSize(size);
+    };
 
     window.closeArticle = function() {
         document.getElementById('articleContent').innerHTML = '';
@@ -822,6 +843,8 @@
 
     // ===== PARAMÈTRES =====
     function updateSettingsUI() {
+        const themeSelect = document.getElementById('themeSelect');
+        if (themeSelect) themeSelect.value = state.theme || 'dark';
         updateProviderUI();
         updateCookieStatusUI();
         updateCafeynStatusUI();
@@ -899,6 +922,14 @@
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-sync"></i> Mettre à jour les règles';
         }
+    };
+
+    window.setTheme = function(theme) {
+        state.theme = theme;
+        document.documentElement.setAttribute('data-theme', theme);
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', 
+            theme === 'dark' ? '#0f0f1a' : theme === 'sand' ? '#f4ead5' : '#f5f5f7');
+        save();
     };
 
     window.reconnectBnf = async function() {

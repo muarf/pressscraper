@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -366,6 +366,18 @@
             </div>
 
             <div class="settings-group">
+                <h3>Apparence</h3>
+                <div class="setting-item">
+                    <span class="label">Thème</span>
+                    <select id="themeSelect" onchange="setTheme(this.value)" style="background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;">
+                        <option value="dark">Sombre</option>
+                        <option value="light">Clair</option>
+                        <option value="sand">Sable</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="settings-group">
                 <h3>Stockage local</h3>
                 <div class="setting-item">
                     <div class="label">Articles sauvegardés</div>
@@ -385,6 +397,9 @@
                 <button class="copy-btn" onclick="copyArticleText()" title="Copier le texte"><i class="fas fa-copy"></i></button>
                 <button class="share-btn" onclick="shareArticle()" title="Partager l'article"><i class="fas fa-share-alt"></i></button>
                 <button class="delete-btn" onclick="confirmDeleteArticle()" title="Supprimer l'article"><i class="fas fa-trash"></i></button>
+                <button class="font-btn" onclick="changeFontSize(-2)" title="Réduire la police"><i class="fas fa-minus"></i></button>
+                <span class="font-size-label" id="fontSizeLabel">16</span>
+                <button class="font-btn" onclick="changeFontSize(2)" title="Agrandir la police"><i class="fas fa-plus"></i></button>
                 <button class="pdf-btn" onclick="openPdf()"><i class="fas fa-file-pdf"></i> PDF</button>
             </div>
             <div class="article-content" id="articleContent"></div>
