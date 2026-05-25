@@ -147,10 +147,10 @@ public class CafeynLoginPlugin extends Plugin {
                 );
 
                 // If on login page, auto-fill and submit
-                if ((url.contains("auth/login") || url.contains("mediatheques")) && url.contains("modules/cafeyn")) {
+                if ((url.contains("auth/login") || url.contains("mediatheques")) && url.contains("cafeyn")) {
                     String jsCode =
                         "(function() {" +
-                        "  var form = document.querySelector('form[action*=\"modules/cafeyn\"]');" +
+                        "  var form = document.querySelector('form[action*=\"cafeyn\"]');" +
                         "  if (!form) return 'no_form';" +
                         "  var u = form.querySelector(\"input[type='text'], input[id*='user'], input[name*='user'], input[name='username'], input[name='j_username'], input[placeholder*='Numéro'], input[placeholder*='card'], input[placeholder*='Identifiant']\");" +
                         "  var p = form.querySelector(\"input[type='password'], input[name='j_password'], input[name='password']\");" +
