@@ -11,7 +11,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "GPL-3.0-only",
   "dependencies": {
     "@capacitor/android": "^8.1.0",
     "@capacitor/app": "^8.1.0",
