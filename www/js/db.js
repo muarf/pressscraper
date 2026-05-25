@@ -8,15 +8,22 @@
     'use strict';
 
     const DB_NAME = 'PresseScraperDB';
+    const DB_VERSION = 2;
     const STORE_NAME = 'articles';
 
     function openDatabase() {
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, 1);
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                const oldVersion = event.oldVersion;
+                if (oldVersion < 1) {
                     db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                }
+                if (oldVersion < 2 && oldVersion >= 1) {
+                    const store = event.currentTarget.transaction.objectStore(STORE_NAME);
+                    // v1 → v2: réserve pour futures migrations
+                    console.log('[DB] Migration IndexedDB v1 → v2');
                 }
             };
             request.onsuccess = (event) => resolve(event.target.result);
