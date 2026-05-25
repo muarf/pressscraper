@@ -140,17 +140,26 @@
 
     // ===== RECHERCHE =====
     async function search(query, options = {}) {
-        const params = {
-            from: 0,
-            size: 30,
+        const urlParams = new URLSearchParams({
+            from: options.from || 0,
+            size: options.size || 30
+        });
+
+        const body = {
             query: query,
-            country: 'fr',
-            lang: 'fr',
-            ...options
+            country: options.country || 'fr',
+            lang: options.lang || 'fr'
         };
 
         const result = await apiCall(
-            `/b2c/stores/${STORE_ID}/all/search?${new URLSearchParams(params).toString()}`
+            `/b2c/stores/${STORE_ID}/all/search?${urlParams.toString()}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: body
+            }
         );
 
         return {
