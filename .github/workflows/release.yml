@@ -55,10 +55,15 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
 
+      - name: Rename APK
+        run: |
+          mv android/app/build/outputs/apk/release/app-release-unsigned-signed.apk \
+             android/app/build/outputs/apk/release/pressscraper-${{ github.ref_name }}.apk
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ github.ref_name }}
           body_path: CHANGELOG.md
-          files: android/app/build/outputs/apk/release/*.apk
+          files: android/app/build/outputs/apk/release/pressscraper-${{ github.ref_name }}.apk
           generate_release_notes: true

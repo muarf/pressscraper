@@ -1,7 +1,7 @@
 (function(global) {
     'use strict';
 
-    const GITHUB_REPO = 'votrecompte/pressecraper';
+    const GITHUB_REPO = 'muarf/pressscraper';
     const GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO + '/releases/latest';
     const APK_FILENAME = 'presse-scraper-update.apk';
     const CHECK_KEY = 'update_last_check';
