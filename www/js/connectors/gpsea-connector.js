@@ -16,7 +16,7 @@
 
         isReady(state) {
             if (window.Cafeyn && window.Cafeyn.isTokenValid()) return true;
-            return !!(state.cafeynJwt);
+            return !!(state.cafeynJwt || (state.cafeynUsername && state.cafeynPassword));
         },
 
         isExpired() {
