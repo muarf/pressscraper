@@ -1,24 +1,24 @@
 # TODO — Presse Scraper
 
 ## 1. Choix du thème au démarrage
-- [ ] Ajouter un slide dans l'onboarding pour choisir le thème : **Sombre**, **Clair** ou **Sable**
-- [ ] Appliquer le thème immédiatement
-- [ ] Stocker le choix dans `state.theme`
+- [x] Ajouter un slide dans l'onboarding pour choisir le thème : **Sombre**, **Clair** ou **Sable**
+- [x] Appliquer le thème immédiatement
+- [x] Stocker le choix dans `state.theme`
 
 ## 2. BPC — ne pas l'embarquer dans le code, l'utilisateur clique pour l'installer
-- [ ] Retirer BPC du code source (ne pas l'héberger → risque de strike)
-- [ ] Ajouter un bouton/slide cliquable pendant l'onboarding pour que l'utilisateur télécharge BPC
-- [ ] Fonctionnement similaire au bouton "Mettre à jour les règles BPC" déjà présent dans les paramètres : l'utilisateur clique, ça va chercher BPC et l'installe
+- [x] Retirer BPC du code source (ne pas l'héberger → risque de strike)
+- [x] Ajouter un bouton/slide cliquable pendant l'onboarding pour que l'utilisateur télécharge BPC
+- [x] Fonctionnement similaire au bouton "Mettre à jour les règles BPC" déjà présent dans les paramètres : l'utilisateur clique, ça va chercher BPC et l'installe
 
 ## 3. Référent PressReader — pré-remplir + validation utilisateur
-- [ ] Pré-remplir le champ référent réseau avec celui de la **BPM de Toulouse Métropole**
-- [ ] L'utilisateur peut modifier et doit **valider** le référent avant utilisation
-- [ ] Stocker le référent validé dans la config
+- [x] Pré-remplir le champ référent réseau avec celui de la **BPM de Toulouse Métropole**
+- [x] L'utilisateur peut modifier et doit **valider** le référent avant utilisation
+- [x] Stocker le référent validé dans la config
 
 ## 4. Messages d'erreur plus clairs — détection article fraîchement publié
-- [ ] Si l'article vient d'être publié (< 24h) et n'est pas trouvé, afficher un message expliquant que l'article est trop récent et peut ne pas encore être indexé
-- [ ] Suggérer de réessayer plus tard
-- [ ] Rédiger un message narratif plutôt qu'une erreur technique brute
+- [x] Si l'article vient d'être publié (< 24h) et n'est pas trouvé, afficher un message expliquant que l'article est trop récent et peut ne pas encore être indexé
+- [x] Suggérer de réessayer plus tard
+- [x] Rédiger un message narratif plutôt qu'une erreur technique brute
 
 ## 5. Métadonnées article — traçabilité complète ✅
 - [x] **Journal / publication** (`publication`) — dispo pour tous les providers
