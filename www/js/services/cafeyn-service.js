@@ -41,6 +41,9 @@
     }
 
     function isTokenValid() {
+        if (global.Cafeyn && typeof global.Cafeyn.isTokenValid === 'function') {
+            return global.Cafeyn.isTokenValid();
+        }
         return cafeynState.isLoggedIn && new Date() < new Date(cafeynState.tokenExpiry);
     }
 
@@ -109,8 +112,9 @@
         async apiCall(endpoint, options = {}) {
             if (!isTokenValid()) throw new Error('Token Cafeyn expiré');
             const url = API_BASE + endpoint;
+            const token = (global.Cafeyn && global.Cafeyn.state && global.Cafeyn.state.token) || cafeynState.token;
             const defaultHeaders = {
-                'Authorization': 'Bearer ' + cafeynState.token,
+                'Authorization': 'Bearer ' + token,
                 'Origin': WEB_BASE,
                 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36',
                 'Accept': 'application/json'

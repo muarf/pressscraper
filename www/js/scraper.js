@@ -452,6 +452,63 @@
     }
 
     /**
+     * Transforme une description (chapeau) en requête de recherche.
+     * Nettoie, retire les mots vides et ne garde que les 15 premiers mots significatifs.
+     */
+    function processDescriptionToQuery(description) {
+        if (!description) return null;
+
+        // Remplacer les apostrophes par des espaces plutôt que de les supprimer directement
+        let cleanDesc = description.replace(/[''""’‘`]/g, ' ');
+        cleanDesc = cleanDesc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()…?–—«»]/g, ' ');
+
+        const words = cleanDesc.toLowerCase().split(/\s+/).filter(Boolean);
+        const filtered = [];
+        const seen = new Set();
+
+        const frenchStopwords = new Set([
+            // Articles & Déterminants
+            'le', 'la', 'les', 'un', 'une', 'des', 'du', 'de', 'en', 'et', 'au', 'aux',
+            'ce', 'ces', 'cette', 'cet', 'mon', 'ton', 'son', 'ma', 'ta', 'sa', 'mes', 'tes', 'ses',
+            'nos', 'vos', 'notre', 'votre', 'leur', 'leurs',
+            // Pronoms
+            'je', 'tu', 'il', 'elle', 'on', 'nous', 'vous', 'ils', 'elles',
+            'me', 'te', 'se', 'y', 'moi', 'toi', 'soi', 'lui',
+            'celui', 'celle', 'ceux', 'celles',
+            'qui', 'que', 'quoi', 'dont', 'ou', 'où',
+            'lequel', 'laquelle', 'lesquels', 'lesquelles',
+            'quel', 'quelle', 'quels', 'quelles',
+            // Conjonctions & Prépositions
+            'et', 'mais', 'donc', 'or', 'ni', 'car', 'si',
+            'par', 'sur', 'dans', 'avec', 'sans', 'sous', 'pour', 'chez', 'vers',
+            'depuis', 'pendant', 'devant', 'derrière', 'avant', 'après',
+            'entre', 'comme', 'quand', 'pourquoi', 'comment',
+            // Auxiliaires & Verbes communs
+            'est', 'ont', 'sont', 'suis', 'es', 'sommes', 'êtes',
+            'ai', 'as', 'avez', 'avons', 'aura', 'auront', 'sera', 'seront',
+            'était', 'étaient', 'avait', 'avaient', 'avoir', 'être', 'fait', 'faire',
+            // Adverbes & divers
+            'ne', 'pas', 'plus', 'bien', 'ici', 'tout', 'tous', 'toute', 'toutes',
+            'autre', 'autres', 'même', 'mêmes', 'qu'
+        ]);
+
+        for (const raw of words) {
+            let cw = raw.replace(/[^\p{L}\d]/gu, '');
+            if (!cw || cw.length <= 1 || frenchStopwords.has(cw)) continue;
+
+            if (!seen.has(cw)) {
+                seen.add(cw);
+                filtered.push(cw);
+            }
+        }
+
+        if (filtered.length < 1) return null;
+
+        return filtered.slice(0, 15).join(' ');
+    }
+
+
+    /**
      * Retourne le code de filtre de date Europresse en fonction de l'âge de l'article.
      */
     function calculateDateFilter(publishedDate) {
@@ -538,40 +595,46 @@
 
         let extractedTitle = null;
         let extractedDate = null;
+        let extractedDescription = null;
 
         async function getExtractedTitleAndDate() {
             if (extractedTitle !== null) {
-                return { title: extractedTitle, date: extractedDate };
+                return { title: extractedTitle, date: extractedDate, description: extractedDescription };
             }
             if (!isUrl) {
                 extractedTitle = titleOrUrl;
                 extractedDate = '';
-                return { title: extractedTitle, date: extractedDate };
+                extractedDescription = '';
+                return { title: extractedTitle, date: extractedDate, description: extractedDescription };
             }
 
             onProgress('Scraper', 'Récupération du titre...', 10);
             let articleTitle = fallbackTitle || '';
             let publishedDate = '';
+            let articleDescription = '';
 
-            if (!articleTitle) {
-                try {
-                    const pageRes = await BnfLogin.httpRequest({
-                        url: titleOrUrl,
-                        method: 'GET',
-                        headers: { 'User-Agent': UA }
-                    });
-                    if (pageRes.status === 200 && pageRes.data) {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(pageRes.data, 'text/html');
+            try {
+                const pageRes = await BnfLogin.httpRequest({
+                    url: titleOrUrl,
+                    method: 'GET',
+                    headers: { 'User-Agent': UA }
+                });
+                if (pageRes.status === 200 && pageRes.data) {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(pageRes.data, 'text/html');
+                    if (!articleTitle) {
                         articleTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')
                             || doc.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
                             || doc.title || '';
-                        publishedDate = doc.querySelector('meta[property="article:published_time"]')?.getAttribute('content')
-                            || doc.querySelector('meta[name="publication_date"]')?.getAttribute('content') || '';
                     }
-                } catch (e) {
-                    console.warn('[SCRAPE] Failed to fetch original page:', e);
+                    publishedDate = doc.querySelector('meta[property="article:published_time"]')?.getAttribute('content')
+                        || doc.querySelector('meta[name="publication_date"]')?.getAttribute('content') || '';
+                    articleDescription = doc.querySelector('meta[property="og:description"]')?.getAttribute('content')
+                        || doc.querySelector('meta[name="twitter:description"]')?.getAttribute('content')
+                        || doc.querySelector('meta[name="description"]')?.getAttribute('content') || '';
                 }
+            } catch (e) {
+                console.warn('[SCRAPE] Failed to fetch original page:', e);
             }
 
             // Fallback : extraction depuis le slug de l'URL
@@ -589,7 +652,8 @@
 
             extractedTitle = articleTitle;
             extractedDate = publishedDate;
-            return { title: extractedTitle, date: extractedDate };
+            extractedDescription = articleDescription;
+            return { title: extractedTitle, date: extractedDate, description: extractedDescription };
         }
 
         // ===========================================
@@ -665,6 +729,21 @@
                             }
                         }
 
+                        let matchedByDescription = false;
+                        if (items.length === 0 && isUrl) {
+                            const { description } = await getExtractedTitleAndDate();
+                            const descQuery = processDescriptionToQuery(description);
+                            if (descQuery) {
+                                onProgress('Cafeyn', `Aucun résultat pour le titre. Recherche par description: "${descQuery}"...`, 39);
+                                console.log('[Cafeyn] Retrying search with description query:', descQuery);
+                                searchRes = await window.Cafeyn.search(descQuery);
+                                items = searchRes?.articles?.collection || [];
+                                if (items.length > 0) {
+                                    matchedByDescription = true;
+                                }
+                            }
+                        }
+
                         if (items.length === 0) {
                             console.warn('[Cafeyn] Aucun résultat pour :', searchQuery);
                             continue;
@@ -685,7 +764,8 @@
                                 }
                             });
 
-                            if (!bestMatch || maxSim < 35) {
+                            const minSim = matchedByDescription ? 15 : 35;
+                            if (!bestMatch || maxSim < minSim) {
                                 console.warn('[Cafeyn] Aucun article avec une similarité suffisante trouvé (maxSim: ' + maxSim + '%)');
                                 continue;
                             }
@@ -780,6 +860,20 @@
                             }
                         }
 
+                        let matchedByDescription = false;
+                        if ((!items || items.length === 0) && isUrl) {
+                            const { description } = await getExtractedTitleAndDate();
+                            const descQuery = processDescriptionToQuery(description);
+                            if (descQuery) {
+                                onProgress('PressReader', `Aucun résultat pour le titre. Recherche par description: "${descQuery}"...`, 39);
+                                console.log('[PressReader] Retrying search with description query:', descQuery);
+                                items = await window.PressReader.search(descQuery, UA);
+                                if (items && items.length > 0) {
+                                    matchedByDescription = true;
+                                }
+                            }
+                        }
+
                         if (!items || items.length === 0) {
                             console.warn('[PressReader] Aucun résultat de recherche pour :', searchQuery);
                             continue;
@@ -800,7 +894,8 @@
                                 }
                             });
 
-                            if (!bestMatch || maxSim < 35) {
+                            const minSim = matchedByDescription ? 15 : 35;
+                            if (!bestMatch || maxSim < minSim) {
                                 console.warn('[PressReader] Aucun article avec une similarité suffisante trouvé (maxSim: ' + maxSim + '%)');
                                 continue;
                             }
@@ -866,7 +961,7 @@
                     continue;
                 }
 
-                const { title: articleTitle, date: publishedDate } = await getExtractedTitleAndDate();
+                const { title: articleTitle, date: publishedDate, description: articleDescription } = await getExtractedTitleAndDate();
                 if (!articleTitle) {
                     console.warn('[BnF] Impossible d\'obtenir le titre de l\'article, passage au suivant');
                     continue;
@@ -993,7 +1088,60 @@
                     }
                 }
 
-                if (!bestMatch || maxSim < 20) {
+                let matchedByDescription = false;
+                if ((!bestMatch || maxSim < 30) && isUrl) {
+                    const descQuery = processDescriptionToQuery(articleDescription);
+                    if (descQuery) {
+                        console.log('[SCRAPE] Retrying search with description strategy on Europresse...', descQuery);
+                        onProgress('Étape 4/5', 'Recherche par description...', 68);
+
+                        const searchBodyDesc = `Keywords=${encodeURIComponent(descQuery)}` +
+                            `&CriteriaKeys[0].Operator=%26&CriteriaKeys[0].Key=TEXT&CriteriaKeys[0].Text=${encodeURIComponent(descQuery)}` +
+                            `&CriteriaKeys[1].Operator=%26&CriteriaKeys[1].Key=LEAD&CriteriaKeys[1].Text=` +
+                            `&CriteriaKeys[2].Operator=%26&CriteriaKeys[2].Key=AUT_BY&CriteriaKeys[2].Text=` +
+                            `&sources=2&CriteriaSet=-1&sourcesFilter=` +
+                            `&PostedFilters.FiltersIDs=8001` +
+                            `&DateFilter.DateRange=${dateFilter}&DateFilter.DateStart=1970-01-01&DateFilter.DateStop=2050-01-01` +
+                            `&SourcesForm=2` +
+                            `&CriteriaExp[0].CriteriaName=Anglais&CriteriaExp[0].CriteriaId=2&CriteriaExp[0].OperatorId=2` +
+                            `&CriteriaExp[1].CriteriaName=Fran%C3%A7ais&CriteriaExp[1].CriteriaId=1&CriteriaExp[1].OperatorId=2` +
+                            `&__RequestVerificationToken=${csrfToken}`;
+
+                        await BnfLogin.httpRequest({
+                            url: `https://${EUROPRESSE_DOMAIN}/Search/AdvancedMobile`,
+                            method: 'POST',
+                            headers: { 'Cookie': cookieHeader, 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
+                            body: searchBodyDesc
+                        });
+
+                        const listResDesc = await BnfLogin.httpRequest({
+                            url: `https://${EUROPRESSE_DOMAIN}/Search/GetPage?pageNo=0&docPerPage=50`,
+                            method: 'GET',
+                            headers: { 'Cookie': cookieHeader, 'User-Agent': UA }
+                        });
+
+                        if (listResDesc.data && listResDesc.data.trim()) {
+                            const listDocDesc = parser.parseFromString(listResDesc.data, 'text/html');
+                            listDocDesc.querySelectorAll('.docListItem').forEach(item => {
+                                const titleLink = item.querySelector('.docList-links');
+                                const docTitle = titleLink ? titleLink.textContent.trim() : '';
+                                const docId = item.querySelector('input[id="doc-name"]')?.value;
+                                const sourceName = item.querySelector('.source-name')?.textContent.trim() || '';
+                                if (docId && docTitle) {
+                                    const sim = calculateSimilarity(articleTitle, docTitle);
+                                    if (sim > maxSim) {
+                                        maxSim = sim;
+                                        bestMatch = { id: docId, title: docTitle, source: sourceName };
+                                        matchedByDescription = true;
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+
+                const minSim = matchedByDescription ? 15 : 20;
+                if (!bestMatch || maxSim < minSim) {
                     console.warn('[BnF] Aucun article trouvé sur Europresse, passage au suivant');
                     continue;
                 }

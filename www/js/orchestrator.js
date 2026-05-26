@@ -65,48 +65,111 @@
         return total === 0 ? 0 : Math.round((score / total) * 100);
     }
 
+    /**
+     * Transforme une description (chapeau) en requête de recherche.
+     * Nettoie, retire les mots vides et ne garde que les 15 premiers mots significatifs.
+     */
+    function processDescriptionToQuery(description) {
+        if (!description) return null;
+
+        // Remplacer les apostrophes par des espaces plutôt que de les supprimer directement
+        let cleanDesc = description.replace(/[''""’‘`]/g, ' ');
+        cleanDesc = cleanDesc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()…?–—«»]/g, ' ');
+
+        const words = cleanDesc.toLowerCase().split(/\s+/).filter(Boolean);
+        const filtered = [];
+        const seen = new Set();
+
+        const frenchStopwords = new Set([
+            // Articles & Déterminants
+            'le', 'la', 'les', 'un', 'une', 'des', 'du', 'de', 'en', 'et', 'au', 'aux',
+            'ce', 'ces', 'cette', 'cet', 'mon', 'ton', 'son', 'ma', 'ta', 'sa', 'mes', 'tes', 'ses',
+            'nos', 'vos', 'notre', 'votre', 'leur', 'leurs',
+            // Pronoms
+            'je', 'tu', 'il', 'elle', 'on', 'nous', 'vous', 'ils', 'elles',
+            'me', 'te', 'se', 'y', 'moi', 'toi', 'soi', 'lui',
+            'celui', 'celle', 'ceux', 'celles',
+            'qui', 'que', 'quoi', 'dont', 'ou', 'où',
+            'lequel', 'laquelle', 'lesquels', 'lesquelles',
+            'quel', 'quelle', 'quels', 'quelles',
+            // Conjonctions & Prépositions
+            'et', 'mais', 'donc', 'or', 'ni', 'car', 'si',
+            'par', 'sur', 'dans', 'avec', 'sans', 'sous', 'pour', 'chez', 'vers',
+            'depuis', 'pendant', 'devant', 'derrière', 'avant', 'après',
+            'entre', 'comme', 'quand', 'pourquoi', 'comment',
+            // Auxiliaires & Verbes communs
+            'est', 'ont', 'sont', 'suis', 'es', 'sommes', 'êtes',
+            'ai', 'as', 'avez', 'avons', 'aura', 'auront', 'sera', 'seront',
+            'était', 'étaient', 'avait', 'avaient', 'avoir', 'être', 'fait', 'faire',
+            // Adverbes & divers
+            'ne', 'pas', 'plus', 'bien', 'ici', 'tout', 'tous', 'toute', 'toutes',
+            'autre', 'autres', 'même', 'mêmes', 'qu'
+        ]);
+
+        for (const raw of words) {
+            let cw = raw.replace(/[^\p{L}\d]/gu, '');
+            if (!cw || cw.length <= 1 || frenchStopwords.has(cw)) continue;
+
+            if (!seen.has(cw)) {
+                seen.add(cw);
+                filtered.push(cw);
+            }
+        }
+
+        if (filtered.length < 1) return null;
+
+        return filtered.slice(0, 15).join(' ');
+    }
+
     // ─── URL / Title Extraction ───
 
     let cachedTitle = null;
     let cachedDate = null;
+    let cachedDescription = null;
     let cachedIsUrl = false;
+
 
     async function extractTitleFromUrl(url, fallbackTitle, state, onProgress) {
         if (cachedTitle !== null && cachedIsUrl === url.startsWith('http')) {
-            return { title: cachedTitle, date: cachedDate };
+            return { title: cachedTitle, date: cachedDate, description: cachedDescription };
         }
         if (!url.startsWith('http')) {
             cachedTitle = url;
             cachedDate = '';
+            cachedDescription = '';
             cachedIsUrl = false;
-            return { title: cachedTitle, date: cachedDate };
+            return { title: cachedTitle, date: cachedDate, description: cachedDescription };
         }
 
         cachedIsUrl = true;
         onProgress('Scraper', 'Récupération du titre...', 10);
         let articleTitle = fallbackTitle || '';
         let publishedDate = '';
+        let articleDescription = '';
 
-        if (!articleTitle) {
-            try {
-                const UA = await getUA();
-                const BnfLogin = window.Capacitor.Plugins.BnfLogin;
-                const pageRes = await BnfLogin.httpRequest({
-                    url, method: 'GET',
-                    headers: { 'User-Agent': UA }
-                });
-                if (pageRes.status === 200 && pageRes.data) {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(pageRes.data, 'text/html');
+        try {
+            const UA = await getUA();
+            const BnfLogin = window.Capacitor.Plugins.BnfLogin;
+            const pageRes = await BnfLogin.httpRequest({
+                url, method: 'GET',
+                headers: { 'User-Agent': UA }
+            });
+            if (pageRes.status === 200 && pageRes.data) {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(pageRes.data, 'text/html');
+                if (!articleTitle) {
                     articleTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')
                         || doc.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
                         || doc.title || '';
-                    publishedDate = doc.querySelector('meta[property="article:published_time"]')?.getAttribute('content')
-                        || doc.querySelector('meta[name="publication_date"]')?.getAttribute('content') || '';
                 }
-            } catch (e) {
-                console.warn('[ORCH] Failed to fetch original page:', e);
+                publishedDate = doc.querySelector('meta[property="article:published_time"]')?.getAttribute('content')
+                    || doc.querySelector('meta[name="publication_date"]')?.getAttribute('content') || '';
+                articleDescription = doc.querySelector('meta[property="og:description"]')?.getAttribute('content')
+                    || doc.querySelector('meta[name="twitter:description"]')?.getAttribute('content')
+                    || doc.querySelector('meta[name="description"]')?.getAttribute('content') || '';
             }
+        } catch (e) {
+            console.warn('[ORCH] Failed to fetch original page:', e);
         }
 
         const knownSiteNames = ['liberation.fr', 'le monde', 'le figaro'];
@@ -123,25 +186,55 @@
 
         cachedTitle = articleTitle;
         cachedDate = publishedDate;
-        return { title: cachedTitle, date: cachedDate };
+        cachedDescription = articleDescription;
+        return { title: cachedTitle, date: cachedDate, description: cachedDescription };
     }
 
     // ─── Retry helpers (for search) ───
 
-    async function retrySearch(searchFn, query, maxWords = 5) {
-        let items = await searchFn(query);
-        if ((!items || items.length === 0) && query.split(/\s+/).length > maxWords) {
-            const shortenedQuery = query.split(/\s+/).slice(0, maxWords).join(' ');
-            console.log('[ORCH] Retry with shorter query:', shortenedQuery);
-            items = await searchFn(shortenedQuery);
+    async function retrySearch(searchFn, query) {
+        let items = [];
+        try {
+            items = await searchFn(query);
+        } catch (e) {
+            console.warn('[ORCH] Search failed with full query, will try shortened:', e.message);
         }
+
+        const words = query.split(/\s+/);
+
+        // Étape 2 : Réessai avec 15 mots si la requête initiale était plus longue
+        if ((!items || items.length === 0) && words.length > 15) {
+            const query15 = words.slice(0, 15).join(' ');
+            console.log('[ORCH] Retry with 15-word query:', query15);
+            try {
+                items = await searchFn(query15);
+            } catch (e) {
+                console.warn('[ORCH] Search failed with 15-word query:', e.message);
+            }
+        }
+
+        // Étape 3 : Réessai avec 5 mots si toujours aucun résultat
+        if ((!items || items.length === 0) && words.length > 5) {
+            const query5 = words.slice(0, 5).join(' ');
+            console.log('[ORCH] Retry with 5-word query:', query5);
+            try {
+                items = await searchFn(query5);
+            } catch (e) {
+                console.warn('[ORCH] Search failed with 5-word query:', e.message);
+            }
+        }
+
+        // Étape 4 : Réessai sans élisions
         if (!items || items.length === 0) {
-            const words = query.split(/\s+/);
             const filteredWords = words.filter(w => !/^l[aeiouyéàèùâêîôûëïü]/i.test(w));
             if (filteredWords.length > 0 && filteredWords.length < words.length) {
-                const elisionFreeQuery = filteredWords.slice(0, maxWords).join(' ');
-                console.log('[ORCH] Retry without elisions:', elisionFreeQuery);
-                items = await searchFn(elisionFreeQuery);
+                const elisionFreeQuery = filteredWords.slice(0, 5).join(' ');
+                console.log('[ORCH] Retry without elisions (5 words):', elisionFreeQuery);
+                try {
+                    items = await searchFn(elisionFreeQuery);
+                } catch (e) {
+                    console.warn('[ORCH] Search failed without elisions:', e.message);
+                }
             }
         }
         return items;
@@ -272,25 +365,51 @@
                             serviceUsed: 'PressReader'
                         };
                     } else {
-                        const { title: extractedTitle } = await extractTitleFromUrl(titleOrUrl, fallbackTitle, state, onProgress);
+                        const { title: extractedTitle, description: extractedDescription } = await extractTitleFromUrl(titleOrUrl, fallbackTitle, state, onProgress);
                         if (!extractedTitle) continue;
                         const query = processTitleToQuery(extractedTitle) || extractedTitle;
                         const referer = state.pressReaderReferer || 'https://mabm.toulouse-metropole.fr/default/presse.aspx?_lg=fr-FR';
 
                         onProgress('PressReader', `Recherche: "${query.substring(0, 40)}..."`, 30);
-                        const items = await retrySearch(
+                        let items = await retrySearch(
                             (q) => service.search(q, referer, UA),
                             query
                         );
-                        if (!items || items.length === 0) continue;
 
                         let bestMatch = null;
                         let maxSim = 0;
-                        if (isUrl) {
+                        if (isUrl && items && items.length > 0) {
                             const match = findBestMatch(items, extractedTitle);
                             bestMatch = match.bestMatch;
                             maxSim = match.maxSim;
-                            if (!bestMatch || maxSim < 35) {
+                        }
+
+                        let matchedByDescription = false;
+                        if ((!bestMatch || maxSim < 35) && isUrl) {
+                            const descQuery = processDescriptionToQuery(extractedDescription);
+                            if (descQuery) {
+                                onProgress('PressReader', `Recherche par description: "${descQuery.substring(0, 40)}..."`, 35);
+                                console.log('[PressReader] Retrying search with description query:', descQuery);
+                                const descItems = await retrySearch(
+                                    (q) => service.search(q, referer, UA),
+                                    descQuery
+                                );
+                                if (descItems && descItems.length > 0) {
+                                    const descMatch = findBestMatch(descItems, extractedTitle);
+                                    if (descMatch.maxSim >= maxSim) {
+                                        bestMatch = descMatch.bestMatch;
+                                        maxSim = descMatch.maxSim;
+                                        matchedByDescription = true;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!bestMatch) continue;
+
+                        if (isUrl) {
+                            const minSim = matchedByDescription ? 15 : 35;
+                            if (maxSim < minSim) {
                                 console.warn(`[PressReader] Similarité insuffisante: ${maxSim}%`);
                                 continue;
                             }
@@ -317,7 +436,25 @@
                 }
 
                 if (service.id === 'cafeyn') {
-                    if (!window.CafeynService || !window.CafeynService.isTokenValid()) continue;
+                    if (!window.CafeynService) continue;
+                    if (!window.CafeynService.isTokenValid()) {
+                        if (connector && typeof connector.refresh === 'function' && (state.cafeynUsername && state.cafeynPassword || state.cafeynJwt)) {
+                            try {
+                                console.log('[ORCH] Cafeyn token invalid, attempting automatic refresh/login...');
+                                onProgress('Cafeyn', 'Reconnexion automatique...', 5);
+                                const refreshRes = await connector.refresh(state);
+                                if (refreshRes && refreshRes.jwt) {
+                                    state.cafeynJwt = refreshRes.jwt;
+                                }
+                            } catch (refreshErr) {
+                                console.warn('[ORCH] Cafeyn auto-refresh failed:', refreshErr.message);
+                            }
+                        }
+                    }
+                    if (!window.CafeynService.isTokenValid()) {
+                        console.log('[ORCH] Cafeyn token is still invalid, skipping Cafeyn');
+                        continue;
+                    }
                     onProgress('Cafeyn', 'Récupération via Cafeyn...', 10);
 
                     let slug = null;
@@ -341,24 +478,50 @@
                             serviceUsed: 'Cafeyn'
                         };
                     } else {
-                        const { title: extractedTitle } = await extractTitleFromUrl(titleOrUrl, fallbackTitle, state, onProgress);
+                        const { title: extractedTitle, description: extractedDescription } = await extractTitleFromUrl(titleOrUrl, fallbackTitle, state, onProgress);
                         if (!extractedTitle) continue;
                         const query = processTitleToQuery(extractedTitle) || extractedTitle;
 
                         onProgress('Cafeyn', `Recherche: "${query.substring(0, 40)}..."`, 30);
-                        const searchRes = await retrySearch(
+                        let searchRes = await retrySearch(
                             (q) => window.CafeynService.search(q).then(r => r.articles?.collection || []),
                             query
                         );
-                        if (!searchRes || searchRes.length === 0) continue;
 
                         let bestMatch = null;
                         let maxSim = 0;
-                        if (isUrl) {
+                        if (isUrl && searchRes && searchRes.length > 0) {
                             const match = findBestMatch(searchRes, extractedTitle);
                             bestMatch = match.bestMatch;
                             maxSim = match.maxSim;
-                            if (!bestMatch || maxSim < 35) {
+                        }
+
+                        let matchedByDescription = false;
+                        if ((!bestMatch || maxSim < 35) && isUrl) {
+                            const descQuery = processDescriptionToQuery(extractedDescription);
+                            if (descQuery) {
+                                onProgress('Cafeyn', `Recherche par description: "${descQuery.substring(0, 40)}..."`, 35);
+                                console.log('[Cafeyn] Retrying search with description query:', descQuery);
+                                const descRes = await retrySearch(
+                                    (q) => window.CafeynService.search(q).then(r => r.articles?.collection || []),
+                                    descQuery
+                                );
+                                if (descRes && descRes.length > 0) {
+                                    const descMatch = findBestMatch(descRes, extractedTitle);
+                                    if (descMatch.maxSim >= maxSim) {
+                                        bestMatch = descMatch.bestMatch;
+                                        maxSim = descMatch.maxSim;
+                                        matchedByDescription = true;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!bestMatch) continue;
+
+                        if (isUrl) {
+                            const minSim = matchedByDescription ? 15 : 35;
+                            if (maxSim < minSim) {
                                 console.warn(`[Cafeyn] Similarité insuffisante: ${maxSim}%`);
                                 continue;
                             }
@@ -391,23 +554,44 @@
                         continue;
                     }
 
-                    const { title: extractedTitle, date: publishedDate } = await extractTitleFromUrl(titleOrUrl, fallbackTitle, state, onProgress);
+                    const { title: extractedTitle, date: publishedDate, description: extractedDescription } = await extractTitleFromUrl(titleOrUrl, fallbackTitle, state, onProgress);
                     if (!extractedTitle) continue;
                     const query = processTitleToQuery(extractedTitle);
                     if (!query) continue;
                     if (global.Scraper) global.Scraper.lastQuery = query;
 
                     onProgress('BnF Europresse', `Recherche: "${query.substring(0, 40)}..."`, 25);
-                    const results = await service.search(query, authHeaders, onProgress);
-                    if (!results || results.length === 0) continue;
+                    let results = await service.search(query, authHeaders, onProgress);
 
+                    let matchedByDescription = false;
                     let bestMatch = null;
                     let maxSim = 0;
                     if (isUrl) {
-                        const match = findBestMatch(results, extractedTitle);
-                        bestMatch = match.bestMatch;
-                        maxSim = match.maxSim;
-                        if (!bestMatch || maxSim < 20) {
+                        if (results && results.length > 0) {
+                            const match = findBestMatch(results, extractedTitle);
+                            bestMatch = match.bestMatch;
+                            maxSim = match.maxSim;
+                        }
+
+                        if ((!bestMatch || maxSim < 20) && isUrl) {
+                            const descQuery = processDescriptionToQuery(extractedDescription);
+                            if (descQuery) {
+                                console.log('[ORCH] Retrying search with description strategy on Europresse...', descQuery);
+                                onProgress('BnF Europresse', 'Recherche par description...', 68);
+                                results = await service.search(descQuery, authHeaders, onProgress);
+                                if (results && results.length > 0) {
+                                    const descMatch = findBestMatch(results, extractedTitle);
+                                    if (descMatch.maxSim >= maxSim) {
+                                        bestMatch = descMatch.bestMatch;
+                                        maxSim = descMatch.maxSim;
+                                        matchedByDescription = true;
+                                    }
+                                }
+                            }
+                        }
+
+                        const minSim = matchedByDescription ? 15 : 20;
+                        if (!bestMatch || maxSim < minSim) {
                             console.warn(`[Europresse] Similarité insuffisante: ${maxSim}%`);
                             continue;
                         }
