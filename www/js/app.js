@@ -90,6 +90,7 @@
             bpcRulesUpdated: state.bpcRulesUpdated || false,
             bpcLastUpdated: state.bpcLastUpdated || '',
             onboardingSkipped: state.onboardingSkipped || false,
+            theme: state.theme || 'dark',
             pressReaderReferer: state.pressReaderReferer || 'https://mabm.toulouse-metropole.fr/default/presse.aspx?_lg=fr-FR',
             history: state.history.map(h => ({
                 id: h.id, title: h.title, url: h.url,
