@@ -23,6 +23,7 @@ import android.webkit.WebViewClient;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKeys;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -39,6 +40,8 @@ import java.util.concurrent.TimeUnit;
 public class ScrapeForegroundService extends Service {
 
     private static final String TAG = "ScrapeService";
+    private static final String BNF_AUTH_URL = "https://bnf.idm.oclc.org/login?url=https://nouveau.europresse.com/access/ip/default.aspx?un=D000067U_1";
+    private static final String EUROPRESSE_DOMAIN = "nouveau-europresse-com.bnf.idm.oclc.org";
     private static final String CHANNEL_ID = "presse_scraper";
     private static final int NOTIF_ID_PROGRESS = 1001;
     private static final int NOTIF_ID_COMPLETE = 1002;
@@ -194,6 +197,7 @@ public class ScrapeForegroundService extends Service {
                     "    printHtmlToPdf: function(o){return new Promise(function(r){r(JSON.parse(bridge.printHtmlToPdf(o.html,o.filename)));});}," +
                     "    getWebViewUserAgent: function(){return Promise.resolve({userAgent:bridge.getWebViewUserAgent()});}," +
                     "    downloadAndExtractBpcRules: function(){return new Promise(function(r){r(JSON.parse(bridge.downloadAndExtractBpcRules()));});}," +
+                    "    login: function(o){return new Promise(function(r){r(JSON.parse(bridge.login(o.username,o.password)));});}," +
                     "    getCredentials: function(){return Promise.resolve({username:'" + escapedBnfUser + "',password:'" + escapedBnfPass + "'});}," +
                     "    saveCredentials: function(){return Promise.resolve({success:true});}," +
                     "    clearCredentials: function(){return Promise.resolve({success:true});}," +
@@ -502,6 +506,132 @@ public class ScrapeForegroundService extends Service {
                 return android.webkit.WebSettings.getDefaultUserAgent(ScrapeForegroundService.this);
             } catch (Exception e) {
                 return "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36";
+            }
+        }
+
+        @JavascriptInterface
+        public String login(final String username, final String password) {
+            try {
+                final CountDownLatch latch = new CountDownLatch(1);
+                final JSONObject[] result = {null};
+
+                mainHandler.post(() -> {
+                    try {
+                        WebView loginWv = new WebView(ScrapeForegroundService.this);
+                        loginWv.getSettings().setJavaScriptEnabled(true);
+                        loginWv.getSettings().setDomStorageEnabled(true);
+                        loginWv.getSettings().setLoadWithOverviewMode(true);
+                        loginWv.getSettings().setUseWideViewPort(true);
+
+                        CookieManager cm = CookieManager.getInstance();
+                        cm.setAcceptCookie(true);
+                        cm.setAcceptThirdPartyCookies(loginWv, true);
+
+                        String safeUser = escapeJs(username);
+                        String safePass = escapeJs(password);
+
+                        loginWv.setWebViewClient(new WebViewClient() {
+                            @Override
+                            public void onPageFinished(WebView view, String url) {
+                                super.onPageFinished(view, url);
+
+                                if (url.contains(EUROPRESSE_DOMAIN) && !url.contains("login")) {
+                                    try {
+                                        String cookiesStr = CookieManager.getInstance().getCookie("https://" + EUROPRESSE_DOMAIN);
+                                        JSONObject res = new JSONObject();
+                                        if (cookiesStr != null && !cookiesStr.isEmpty()) {
+                                            JSONArray cookieArray = new JSONArray();
+                                            String[] pairs = cookiesStr.split(";");
+                                            for (String pair : pairs) {
+                                                String[] parts = pair.trim().split("=", 2);
+                                                if (parts.length == 2) {
+                                                    JSONObject cookie = new JSONObject();
+                                                    cookie.put("name", parts[0].trim());
+                                                    cookie.put("value", parts[1].trim());
+                                                    cookie.put("domain", EUROPRESSE_DOMAIN);
+                                                    cookie.put("path", "/");
+                                                    cookieArray.put(cookie);
+                                                }
+                                            }
+                                            res.put("success", true);
+                                            res.put("cookies", cookieArray);
+                                            res.put("cookieHeader", cookiesStr);
+                                        } else {
+                                            res.put("success", false);
+                                            res.put("error", "No cookies found after login");
+                                        }
+                                        result[0] = res;
+                                        latch.countDown();
+                                        view.destroy();
+                                    } catch (Exception e) {
+                                        try {
+                                            JSONObject err = new JSONObject();
+                                            err.put("success", false);
+                                            err.put("error", e.getMessage());
+                                            result[0] = err;
+                                        } catch (Exception ignored) {}
+                                        latch.countDown();
+                                        view.destroy();
+                                    }
+                                    return;
+                                }
+
+                                view.evaluateJavascript(
+                                    "(function() {" +
+                                    "  var u = document.querySelector(\"input[type='text'], input[id*='user'], input[name*='user'], input[name='username'], input[name='j_username']\");" +
+                                    "  var p = document.querySelector(\"input[type='password'], input[name='j_password']\");" +
+                                    "  if (u && p) {" +
+                                    "    u.value = '" + safeUser + "';" +
+                                    "    u.dispatchEvent(new Event('input', {bubbles: true}));" +
+                                    "    u.dispatchEvent(new Event('change', {bubbles: true}));" +
+                                    "    p.value = '" + safePass + "';" +
+                                    "    p.dispatchEvent(new Event('input', {bubbles: true}));" +
+                                    "    p.dispatchEvent(new Event('change', {bubbles: true}));" +
+                                    "    var btn = document.querySelector(\"input[type='submit'], button[type='submit'], button.submit, .btn-primary\");" +
+                                    "    if (btn) { btn.click(); return 'submitted'; }" +
+                                    "    var form = document.querySelector('form');" +
+                                    "    if (form) { form.submit(); return 'submitted'; }" +
+                                    "    return 'no_submit';" +
+                                    "  }" +
+                                    "  return 'no_fields';" +
+                                    "})()",
+                                    fillResult -> {
+                                        Log.d(TAG, "Login form fill: " + fillResult);
+                                    }
+                                );
+                            }
+                        });
+
+                        loginWv.loadUrl(BNF_AUTH_URL);
+                    } catch (Exception e) {
+                        try {
+                            JSONObject err = new JSONObject();
+                            err.put("success", false);
+                            err.put("error", e.getMessage());
+                            result[0] = err;
+                        } catch (Exception ignored) {}
+                        latch.countDown();
+                    }
+                });
+
+                boolean awaited = latch.await(60, TimeUnit.SECONDS);
+                if (result[0] != null) {
+                    return result[0].toString();
+                }
+                JSONObject timeout = new JSONObject();
+                timeout.put("success", false);
+                timeout.put("error", "Login timeout");
+                return timeout.toString();
+
+            } catch (Exception e) {
+                try {
+                    JSONObject err = new JSONObject();
+                    err.put("success", false);
+                    err.put("error", e.getMessage());
+                    return err.toString();
+                } catch (Exception je) {
+                    return "{\"success\":false,\"error\":\"Login failed\"}";
+                }
             }
         }
 
