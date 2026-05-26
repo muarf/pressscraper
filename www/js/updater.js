@@ -71,14 +71,14 @@
                 return;
             }
 
-            // Compare versions
-            const latestStr = latestTag.replace(/^v/, '').split(/[.-]/).map(Number);
-            const currentStr = current.name.replace(/^v/, '').split(/[.-]/).map(Number);
+            // Compare only major.minor.patch (first 3 numeric segments)
+            const latestParts = latestTag.replace(/^v/, '').split(/[.-]/).map(Number);
+            const currentParts = current.name.replace(/^v/, '').split(/[.-]/).map(Number);
 
             let isNewer = false;
-            for (let i = 0; i < Math.max(latestStr.length, currentStr.length); i++) {
-                const l = latestStr[i] || 0;
-                const c = currentStr[i] || 0;
+            for (let i = 0; i < 3; i++) {
+                const l = latestParts[i] || 0;
+                const c = currentParts[i] || 0;
                 if (l > c) { isNewer = true; break; }
                 if (l < c) break;
             }
