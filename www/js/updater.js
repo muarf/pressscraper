@@ -71,7 +71,7 @@
                 return;
             }
 
-            // Compare only major.minor.patch (first 3 numeric segments)
+            // Compare major.minor.patch
             const latestParts = latestTag.replace(/^v/, '').split(/[.-]/).map(Number);
             const currentParts = current.name.replace(/^v/, '').split(/[.-]/).map(Number);
 
@@ -81,6 +81,11 @@
                 const c = currentParts[i] || 0;
                 if (l > c) { isNewer = true; break; }
                 if (l < c) break;
+            }
+            // If major.minor.patch are equal, a prerelease tag is an update
+            // (the localStorage installedTag check prevents re-prompt loops)
+            if (!isNewer && latestTag.includes('-')) {
+                isNewer = true;
             }
 
             updateState.available = isNewer;
