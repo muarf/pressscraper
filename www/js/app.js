@@ -799,6 +799,17 @@
 
         } catch(e) {
             console.error('[SCRAPE] Error:', e);
+
+            // In headless mode, report error to native bridge so the service shows
+            // an error notification instead of timing out silently
+            if (window._headlessMode && typeof window.HeadlessBridge !== 'undefined') {
+                window.HeadlessBridge.showNotification(
+                    '❌ Échec du téléchargement',
+                    e.message.substring(0, 200),
+                    ''
+                );
+            }
+
             card.className = 'status-card visible error';
             icon.className = 'fas fa-exclamation-triangle';
             document.getElementById('statusTitle').textContent = 'Erreur';

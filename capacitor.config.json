@@ -14,6 +14,9 @@
       },
       "CafeynLogin": {
         "package": "io.qzz.pressecraper.CafeynLoginPlugin"
+      },
+      "HeadlessScrape": {
+        "package": "io.qzz.pressecraper.HeadlessScrapePlugin"
       }
     }
 }
