@@ -168,24 +168,22 @@ public class CafeynLoginPlugin extends Plugin {
                 );
 
                 // If on login page, auto-fill and submit
-                if (url.contains("auth/login") || url.contains("mediatheques")) {
+                if ((url.contains("auth/login") || url.contains("mediatheques")) && url.contains("cafeyn")) {
                     String jsCode =
-                        "(function() {" +
-                        "  var inputs = Array.from(document.querySelectorAll('input'));" +
-                        "  var u = inputs.find(i => i.name === 'username' && i.offsetParent !== null);" +
-                        "  var p = inputs.find(i => i.name === 'password' && i.offsetParent !== null);" +
+                        "  var form = document.querySelector('form[action*=\"cafeyn\"]') || document.querySelector('form');" +
+                        "  if (!form) return 'no_form';" +
+                        "  var u = form.querySelector(\"input[name='username']\") || form.querySelector(\"input[type='text'], input[id*='user'], input[name*='user'], input[name='username'], input[name='j_username'], input[placeholder*='Numéro'], input[placeholder*='card'], input[placeholder*='Identifiant']\");" +
+                        "  var p = form.querySelector(\"input[name='password']\") || form.querySelector(\"input[type='password'], input[name='j_password'], input[name='password']\");" +
                         "  if (u && p) {" +
                         "    u.value = '" + safeUsername + "';" +
                         "    u.dispatchEvent(new Event('input', {bubbles: true}));" +
                         "    u.dispatchEvent(new Event('change', {bubbles: true}));" +
+                        "    u.dispatchEvent(new Event('blur', {bubbles: true}));" +
                         "    p.value = '" + safePassword + "';" +
                         "    p.dispatchEvent(new Event('input', {bubbles: true}));" +
                         "    p.dispatchEvent(new Event('change', {bubbles: true}));" +
-                        "    var btn = inputs.find(i => i.type === 'submit' && i.name === 'login' && i.offsetParent !== null);" +
-                        "    if (btn) { btn.click(); return 'submitted_click'; }" +
-                        "    var form = u.closest('form');" +
-                        "    if (form) { form.submit(); return 'submitted_form'; }" +
-                        "    return 'no_submit';" +
+                        "    p.dispatchEvent(new Event('blur', {bubbles: true}));" +
+                        "    form.submit(); return 'submitted';" +
                         "  }" +
                         "  return 'no_fields';" +
                         "})()";
