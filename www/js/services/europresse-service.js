@@ -57,6 +57,34 @@
         } catch (e) { return '9'; }
     }
 
+    function parseFrenchDate(dateStr) {
+        if (!dateStr) return '';
+        if (!isNaN(Date.parse(dateStr))) return dateStr;
+        
+        const months = {
+            'janvier': '01', 'février': '02', 'mars': '03', 'avril': '04', 'mai': '05', 'juin': '06',
+            'juillet': '07', 'août': '08', 'septembre': '09', 'octobre': '10', 'novembre': '11', 'décembre': '12'
+        };
+        const cleanStr = dateStr.toLowerCase().replace(/[.,]/g, '').trim();
+        const parts = cleanStr.split(/\s+/);
+        
+        let day = '', month = '', year = '';
+        for (const part of parts) {
+            if (/^\d{1,2}$/.test(part)) {
+                day = part.padStart(2, '0');
+            } else if (months[part]) {
+                month = months[part];
+            } else if (/^\d{4}$/.test(part)) {
+                year = part;
+            }
+        }
+        
+        if (day && month && year) {
+            return `${year}-${month}-${day}T12:00:00Z`;
+        }
+        return dateStr;
+    }
+
     function removeHighlightTags(html) {
         if (!html) return html;
         try {
@@ -216,8 +244,25 @@
             const cleanContent = removeHighlightTags(contentContainer.innerHTML);
             const finalHtml = `<style>${window.PRINT_CSS}</style><h1>${cleanTitle}</h1>${cleanContent}`;
 
-            const bnfDate = docDoc.querySelector('.dateTimeArticleVisu')?.textContent?.trim()
+            let bnfDate = docDoc.querySelector('.dateTimeArticleVisu')?.textContent?.trim()
                 || docDoc.querySelector('meta[name="citation_date"]')?.getAttribute('content') || '';
+
+            // Fallback : extraire la date du docKey si présent au format news·YYYYMMDD·...
+            if (!bnfDate && articleId) {
+                const dateMatch = articleId.match(/^news·(\d{8})·/i);
+                if (dateMatch) {
+                    const rawDate = dateMatch[1];
+                    const y = rawDate.substring(0, 4);
+                    const m = rawDate.substring(4, 6);
+                    const d = rawDate.substring(6, 8);
+                    bnfDate = `${y}-${m}-${d}T12:00:00Z`;
+                }
+            }
+
+            if (bnfDate) {
+                bnfDate = parseFrenchDate(bnfDate);
+            }
+
             const bnfAuthor = docDoc.querySelector('.auteurArticleVisu')?.textContent?.trim()
                 || docDoc.querySelector('meta[name="citation_author"]')?.getAttribute('content') || '';
             const bnfSource = docDoc.querySelector('.sourceArticleVisu')?.textContent?.trim() || '';
