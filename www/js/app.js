@@ -1,9 +1,9 @@
 /**
- * app.js — Logique UI principale, gestion de l'état et navigation — Presse Scraper
+ * app.js — Logique UI principale, gestion de l'état et navigation — Archive Presse
  *
  * Dépendances (chargées avant ce fichier dans index.html) :
  *   - db.js   → window.DB
- *   - scraper.js → window.Scraper
+ *   - scraper.js → window.Scraper (interne)
  */
 (function() {
     'use strict';
@@ -183,14 +183,8 @@
             }
         }
 
-        // 3. Vérifier les mises à jour
-        if (typeof window.Updater !== 'undefined' && typeof window.Capacitor !== 'undefined') {
-            window.Updater.checkForUpdates(false).then(() => {
-                if (window.Updater.state.available) {
-                    showUpdatePrompt();
-                }
-            });
-        }
+        // 3. Afficher la version
+        window.showAppVersion();
 
         // 4. Décider quel écran afficher
         // Appliquer le thème et la taille de police
@@ -244,7 +238,7 @@
         if (!btn || !status) return;
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installation...';
-        status.textContent = 'Téléchargement des règles BPC...';
+            status.textContent = 'Téléchargement du plugin...';
 
         try {
             const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
@@ -268,7 +262,7 @@
                 await window.Scraper.initBpc();
             }
 
-            status.textContent = 'Règles BPC installées avec succès !';
+            status.textContent = 'Plugin installé avec succès !';
             status.style.color = 'var(--success)';
             btn.innerHTML = '<i class="fas fa-check"></i> Installé';
         } catch(e) {
@@ -276,7 +270,7 @@
             status.textContent = 'Échec: ' + e.message;
             status.style.color = 'var(--accent)';
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-download"></i> Installer les règles BPC';
+            btn.innerHTML = '<i class="fas fa-download"></i> Installer le plugin';
         }
     };
 
@@ -638,7 +632,7 @@
         if (!input) { toast('Entrez un lien d\'article ou des mots-clés', 'error'); return; }
 
         if (!navigator.onLine) {
-            toast('Aucune connexion Internet. Le scraping nécessite une connexion réseau.', 'error');
+            toast('Aucune connexion Internet. La récupération nécessite une connexion réseau.', 'error');
             return;
         }
 
@@ -685,7 +679,7 @@
         try {
             while (true) {
                 if (Date.now() - startTime > MAX_SCRAPE_DURATION_MS) {
-                    throw new Error('Timeout global de scraping dépassé (120s)');
+                    throw new Error('Délai de récupération dépassé (120s)');
                 }
                 // Renouvellement automatique de session si expirée localement
                 if (!areCookiesValid() && state.bnfUsername && state.bnfPassword) {
@@ -814,7 +808,7 @@
         const btn = document.getElementById('scrapeBtn');
         btn.disabled = false;
         btn.classList.remove('loading');
-        btn.innerHTML = '<i class="fas fa-magic"></i> Scraper';
+                btn.innerHTML = '<i class="fas fa-magic"></i> Sauvegarder';
     }
 
     // ===== VISIONNEUSE D'ARTICLE =====
@@ -1085,7 +1079,7 @@
         if (!btn) return;
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mise à jour...';
-        toast('Mise à jour des règles BPC...', '');
+                            toast('Mise à jour du plugin...', '');
 
         try {
             const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
@@ -1101,7 +1095,7 @@
                 localStorage.setItem('bpc_script_js', res.script_js);
                 localStorage.setItem('bpc_script_fr_js', res.script_fr_js);
             } else {
-                throw new Error("La mise à jour des règles BPC nécessite d'être sur l'application mobile.");
+                throw new Error("La mise à jour du plugin nécessite l'application mobile.");
             }
 
             state.bpcRulesUpdated = true;
@@ -1114,7 +1108,7 @@
             }
 
             updateBpcStatusUI();
-            toast('Règles BPC mises à jour !', 'success');
+            toast('Plugin mis à jour !', 'success');
         } catch(e) {
             console.error('[BPC] Update failed:', e);
             toast('Mise à jour échouée: ' + e.message, 'error');
@@ -1178,7 +1172,7 @@
         bnf: 'BnF Europresse',
         cafeyn: 'Cafeyn',
         pressreader: 'PressReader',
-        bpc: 'Bypass Paywall (direct)'
+        bpc: 'Plugin de lecture'
     };
 
     window.renderProviderOrderList = function() {
@@ -1361,41 +1355,18 @@
         }
     }
 
-    // ===== AUTO-UPDATE =====
-    window.showUpdatePrompt = function() {
-        const latest = window.Updater.state.latestVersion;
-        const toastEl = document.getElementById('toast');
-        document.getElementById('toastText').innerHTML = `Mise à jour disponible : ${latest} <span style="text-decoration:underline;cursor:pointer;font-weight:700;" onclick="applyUpdate()">Télécharger</span>`;
-        toastEl.className = 'toast show';
-        clearTimeout(window._toastTimer);
-    };
-
-    window.applyUpdate = async function() {
-        const toastEl = document.getElementById('toast');
-        toastEl.classList.remove('show');
-        toast('Téléchargement de la mise à jour...', '');
+    // ===== VERSION =====
+    window.showAppVersion = async function() {
+        const el = document.getElementById('appVersionText');
+        if (!el) return;
         try {
-            await window.Updater.downloadAndInstall();
-            toast('Installation en cours...', 'success');
-        } catch(e) {
-            toast('Échec: ' + e.message, 'error');
-        }
-    };
-
-    window.manualUpdateCheck = async function() {
-        const statusEl = document.getElementById('updateStatusText');
-        statusEl.textContent = 'Vérification...';
-        try {
-            await window.Updater.checkForUpdates(true);
-            if (window.Updater.state.available) {
-                statusEl.textContent = 'Mise à jour disponible : ' + window.Updater.state.latestVersion;
-                showUpdatePrompt();
-            } else {
-                statusEl.textContent = 'Dernière version : ' + window.Updater.state.latestVersion + ' (à jour)';
+            const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
+            if (BnfLogin && typeof BnfLogin.getAppVersion === 'function') {
+                const res = await BnfLogin.getAppVersion();
+                if (res.versionName) { el.textContent = res.versionName; return; }
             }
-        } catch(e) {
-            statusEl.textContent = 'Erreur: ' + e.message;
-        }
+        } catch(e) { /* ignore */ }
+        el.textContent = '1.1.0';
     };
 
     window.clearCache = async function() {

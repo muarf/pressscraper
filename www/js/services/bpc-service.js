@@ -63,7 +63,7 @@
 
     const BpcService = {
         id: 'bpc',
-        name: 'Bypass Paywall Clean',
+        name: 'Plugin de lecture',
 
         /**
          * Re-initialize BPC rules (called after update).
@@ -125,7 +125,7 @@
 
         const headers = { 'User-Agent': customUA, 'Referer': 'https://www.google.com/' };
 
-        onProgress('Bypass Direct', 'Téléchargement de la page...', 20);
+        onProgress('Plugin', 'Téléchargement de la page...', 20);
 
         let pageRes;
         if (BnfLogin) {
@@ -138,7 +138,7 @@
             throw new Error(`HTTP error ${pageRes?.status || 'unknown'}`);
         }
 
-        onProgress('Bypass Direct', 'Exécution des règles de bypass...', 40);
+        onProgress('Plugin', 'Extraction du contenu...', 40);
 
         const iframe = document.createElement('iframe');
         iframe.style.display = 'none';
@@ -490,7 +490,7 @@
         }
 
 
-        onProgress('Bypass Direct', 'Déverrouillage de l\'article...', 60);
+        onProgress('Plugin', 'Récupération du contenu...', 60);
 
         const startTime = Date.now();
         const checkInterval = 100;
@@ -544,7 +544,7 @@
             }, checkInterval);
         });
 
-        onProgress('Bypass Direct', 'Extraction du texte...', 80);
+        onProgress('Plugin', 'Extraction du texte...', 80);
 
         let contentEl = null;
         if (contentSelector) contentEl = iframeDocument.querySelector(contentSelector);
@@ -555,7 +555,7 @@
 
         if (hasPaywall && textLength < 800) {
             iframe.remove();
-            throw new Error('Paywall still active after bypass');
+            throw new Error('Contenu protégé non accessible');
         }
 
         const pageTitle = iframeDocument.querySelector('meta[property="og:title"]')?.getAttribute('content')

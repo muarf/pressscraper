@@ -1,2 +1,17 @@
 *.apk
 *.aab
+node_modules/
+.gradle/
+build/
+android/.gradle/
+android/app/build/
+android/captures/
+android/.idea/
+local.properties
+capacitor-cordova-android-plugins/
+*.log
+.DS_Store
+Thumbs.db
+*.iml
+.idea/
+cafeyn_temp/

@@ -142,7 +142,7 @@
         }
 
         cachedIsUrl = true;
-        onProgress('Scraper', 'Récupération du titre...', 10);
+        onProgress('Récupération', 'Récupération du titre...', 10);
         let articleTitle = fallbackTitle || '';
         let publishedDate = '';
         let articleDescription = '';
@@ -335,7 +335,7 @@
 
                 if (service.id === 'bpc') {
                     if (!isUrl) continue;
-                    onProgress('Bypass Direct', 'Bypass direct...', 10);
+                    onProgress('Plugin', 'Lecture directe...', 10);
                     result = await service.fetchByUrl(titleOrUrl, authHeaders, onProgress);
                     if (result) return result;
                     continue;
@@ -638,7 +638,7 @@
 
         // All pairs exhausted — build error message
         const { title: finalTitle, date: finalDate } = await extractTitleFromUrl(titleOrUrl, fallbackTitle, state, onProgress);
-        let errorMsg = "Aucun fournisseur n'a pu récupérer cet article.";
+        let errorMsg = "Aucune source n'a pu récupérer cet article.";
         if (finalTitle) errorMsg += ` Termes recherchés : "${finalTitle.substring(0, 60)}".`;
         if (finalDate) {
             try {

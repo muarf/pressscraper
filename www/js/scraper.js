@@ -608,7 +608,7 @@
                 return { title: extractedTitle, date: extractedDate, description: extractedDescription };
             }
 
-            onProgress('Scraper', 'Récupération du titre...', 10);
+            onProgress('Récupération', 'Récupération du titre...', 10);
             let articleTitle = fallbackTitle || '';
             let publishedDate = '';
             let articleDescription = '';
@@ -1188,7 +1188,7 @@
 
             if (provider === 'bpc') {
                 if (!isUrl) continue;
-                onProgress('Bypass Direct', 'Bypass direct...', 10);
+                onProgress('Plugin', 'Lecture directe...', 10);
                 try {
                     const urlObj = new URL(titleOrUrl);
                     const hostname = urlObj.hostname;
@@ -1210,7 +1210,7 @@
 
         // Aucun fournisseur n'a pu récupérer l'article
         const { title: finalTitle, date: finalDate } = await getExtractedTitleAndDate();
-        let errorMsg = "Aucun fournisseur n'a pu récupérer cet article.";
+        let errorMsg = "Aucune source n'a pu récupérer cet article.";
         if (finalTitle) {
             errorMsg += ` Termes recherchés : "${finalTitle.substring(0, 60)}".`;
         }
@@ -1225,7 +1225,7 @@
                 }
             } catch(e) {}
         }
-        errorMsg += " Vérifiez votre configuration et vos sessions (token BnF/Cafeyn expiré ?).";
+        errorMsg += " Vérifiez votre configuration et vos sessions.";
         throw new Error(errorMsg);
     }
 
@@ -1253,7 +1253,7 @@
             'Referer': 'https://www.google.com/' // Moteur de recherche comme Referer par défaut
         };
 
-        onProgress('Bypass Direct', 'Téléchargement de la page...', 20);
+        onProgress('Plugin', 'Téléchargement de la page...', 20);
 
         // 3. Téléchargement du HTML original
         let pageRes;
@@ -1272,7 +1272,7 @@
             throw new Error(`HTTP error ${pageRes?.status || 'unknown'} during direct fetch`);
         }
 
-        onProgress('Bypass Direct', 'Exécution des règles de bypass...', 40);
+        onProgress('Plugin', 'Extraction du contenu...', 40);
 
         // 4. Création de l'Iframe sandboxé pour exécuter le bypass
         const iframe = document.createElement('iframe');
@@ -1724,7 +1724,7 @@
         iframeDocument.head.appendChild(bootstrapScript);
 
         // 7. Attente active de la résolution du bypass
-        onProgress('Bypass Direct', 'Déverrouillage de l\'article...', 60);
+        onProgress('Plugin', 'Récupération du contenu...', 60);
 
         const startTime = Date.now();
         const checkInterval = 100;
@@ -1789,7 +1789,7 @@
         });
 
         // Extraction finale du contenu
-        onProgress('Bypass Direct', 'Extraction du texte...', 80);
+        onProgress('Plugin', 'Extraction du texte...', 80);
 
         let contentEl = null;
         if (contentSelector) {

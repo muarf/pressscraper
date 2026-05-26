@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f0f1a">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src *; frame-src 'self' https:;">
-    <title>Presse Scraper</title>
+    <title>Archive Presse</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
@@ -27,15 +27,15 @@
             <!-- Slide 1: Welcome & Overview -->
             <div class="onboarding-slide active" data-slide="0">
                 <i class="fas fa-newspaper logo" style="color:var(--accent)"></i>
-                <h2>Bienvenue sur Presse Scraper</h2>
-                <p class="subtitle">Lisez vos articles préférés en contournant les paywalls grâce à 4 méthodes complémentaires.</p>
+                <h2>Bienvenue sur Archive Presse</h2>
+                <p class="subtitle">Consultez et sauvegardez vos articles depuis vos abonnements presse.</p>
                 
                 <div class="methods-overview">
                     <div class="method-item">
                         <i class="fas fa-bolt icon-direct"></i>
                         <div class="method-details">
-                            <h4>Contournement Direct</h4>
-                            <p>Règles locales rapides sans compte.</p>
+                            <h4>Accès Direct</h4>
+                            <p>Lecture depuis des sources partenaires.</p>
                         </div>
                     </div>
                     <div class="method-item">
@@ -83,8 +83,8 @@
             <!-- Slide 2: Bypass Direct (BPC) -->
             <div class="onboarding-slide" data-slide="1">
                 <i class="fas fa-bolt logo" style="color:#ffd32a"></i>
-                <h2>Contournement Direct (BPC)</h2>
-                <p class="subtitle">Utilise des scripts locaux pour contourner les paywalls de nombreux sites d'actualité.</p>
+                <h2>Plugin de lecture</h2>
+                <p class="subtitle">Téléchargez un plugin optionnel pour améliorer la compatibilité avec certains sites.</p>
                 
                 <div class="onboard-card">
                     <div class="setting-item" style="background:var(--bg-secondary); border:none; margin:0;">
@@ -96,10 +96,10 @@
                     </div>
                 </div>
                 <button class="btn-primary" id="onboardBpcInstallBtn" onclick="onboardInstallBpc()" style="padding:10px;margin-bottom:10px;">
-                    <i class="fas fa-download"></i> Installer les règles BPC
+                    <i class="fas fa-download"></i> Installer le plugin
                 </button>
                 <div id="onboardBpcStatus" style="font-size:12px;text-align:center;color:var(--text-secondary);margin-bottom:8px;"></div>
-                <p class="info-text">Les règles BPC ne sont pas embarquées dans l'application. Cliquez sur le bouton pour les télécharger depuis le dépôt officiel.</p>
+                <p class="info-text">Le plugin est un projet open source externe. Cliquez sur le bouton pour le télécharger.</p>
             </div>
 
             <!-- Slide 3: PressReader -->
@@ -224,7 +224,7 @@
             <div class="onboarding-slide" data-slide="5">
                 <i class="fas fa-check-circle logo" style="color:var(--success)"></i>
                 <h2>C'est tout bon !</h2>
-                <p class="subtitle">Votre Presse Scraper est configuré et prêt à l'emploi.</p>
+                <p class="subtitle">Votre Archive Presse est configuré et prêt à l'emploi.</p>
                 
                 <div class="summary-card">
                     <p style="font-size:14px; text-align:left; line-height:1.6; margin-bottom:12px;">
@@ -265,7 +265,7 @@
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1><i class="fas fa-newspaper"></i> Presse Scraper</h1>
+            <h1><i class="fas fa-newspaper"></i> Archive Presse</h1>
             <span class="session-dot none" id="sessionDot" title="Session BnF"></span>
         </header>
 
@@ -285,7 +285,7 @@
                 <div class="input-row">
                     <input type="text" id="urlInput" placeholder="Collez un lien ou entrez des mots-clés..." autocomplete="off">
                     <button class="scrape-btn" id="scrapeBtn" onclick="startScraping()">
-                        <i class="fas fa-magic"></i> Scraper
+                        <i class="fas fa-magic"></i> Sauvegarder
                     </button>
                 </div>
             </div>
@@ -383,14 +383,14 @@
                     </button>
                 </div>
                 <p style="font-size:12px;color:var(--text-secondary);padding:4px;line-height:1.4;">
-                    L'accès est activé automatiquement sans identifiants de connexion. L'application simule un référent bibliothèque pour déverrouiller vos articles.
+                    L'accès est activé automatiquement sans identifiants de connexion via un référent bibliothèque partenaire.
                 </p>
             </div>
 
             <div class="settings-group" id="bpcProviderConfig" style="display:none;">
-                <h3>Scraping Direct (Bypass Paywall)</h3>
+                <h3>Plugin de lecture</h3>
                 <div class="setting-item">
-                    <div class="label">Activer le contournement direct</div>
+                    <div class="label">Activer le plugin</div>
                     <label class="switch">
                         <input type="checkbox" id="directScrapingToggle" onchange="toggleDirectScraping(this.checked)">
                         <span class="slider"></span>
@@ -401,7 +401,7 @@
                     <span id="bpcRulesText">Non installé</span>
                 </div>
                 <button class="action-btn secondary" id="updateBpcBtn" style="width:100%;" onclick="updateBpcRules()">
-                    <i class="fas fa-sync"></i> Mettre à jour les règles
+                    <i class="fas fa-sync"></i> Mettre à jour le plugin
                 </button>
             </div>
 
@@ -418,15 +418,11 @@
             </div>
 
             <div class="settings-group">
-                <h3>Mise à jour</h3>
-                <button class="action-btn primary" onclick="manualUpdateCheck()" style="width:100%;">
-                    <i class="fas fa-sync-alt"></i> Vérifier les mises à jour
-                </button>
-                <p style="font-size:11px;color:var(--text-secondary);margin-top:6px;text-align:center;" id="updateStatusText"></p>
-                <p style="font-size:10px;color:var(--text-secondary);margin-top:8px;padding:8px;background:rgba(255,165,2,0.08);border-radius:8px;line-height:1.4;">
-                    <i class="fas fa-shield-alt" style="margin-right:4px;"></i>
-                    Play Protect peut signaler cette app comme dangereuse car elle peut s'auto-mettre à jour (permission <code>REQUEST_INSTALL_PACKAGES</code>).
-                    C'est normal pour une app sideloadée. Le code est 100% open source : <a href="https://github.com/muarf/pressscraper" target="_blank" style="color:var(--accent);">github.com/muarf/pressscraper</a>
+                <h3>À propos</h3>
+                <p style="font-size:12px;color:var(--text-secondary);text-align:center;line-height:1.5;">
+                    Version <span id="appVersionText">1.1.0</span>
+                    <br>
+                    <a href="https://github.com/muarf/pressscraper" target="_blank" style="color:var(--accent);">github.com/muarf/pressscraper</a>
                 </p>
             </div>
 
@@ -514,15 +510,6 @@
 <script src="js/updater.js"></script>
 <script src="js/purify.min.js"></script>
 <script src="js/app.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/eruda@3"></script>
-<script>
-    var erudaEnabled = false;
-    document.addEventListener('dblclick', function() {
-        if (typeof eruda !== 'undefined') {
-            if (erudaEnabled) { eruda.destroy(); erudaEnabled = false; }
-            else { eruda.init(); erudaEnabled = true; }
-        }
-    });
-</script>
+
 </body>
 </html>
