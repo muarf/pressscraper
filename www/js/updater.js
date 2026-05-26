@@ -63,6 +63,14 @@
                 updateState.downloadUrl = apkAsset.browser_download_url;
             }
 
+            // Skip if this exact tag was already installed (avoids re-prompt loop)
+            const installedTag = localStorage.getItem('update_installed_tag');
+            if (installedTag === latestTag) {
+                updateState.available = false;
+                localStorage.setItem(CHECK_KEY, String(Date.now()));
+                return;
+            }
+
             // Compare versions
             const latestStr = latestTag.replace(/^v/, '').split(/[.-]/).map(Number);
             const currentStr = current.name.replace(/^v/, '').split(/[.-]/).map(Number);
@@ -104,9 +112,16 @@
         }
     }
 
+    function markBetaInstalled() {
+        if (updateState.latestVersion) {
+            localStorage.setItem('update_installed_tag', updateState.latestVersion);
+        }
+    }
+
     global.Updater = {
         checkForBetaUpdates,
         downloadAndInstall,
+        markBetaInstalled,
         state: updateState
     };
 
