@@ -772,6 +772,7 @@
 
                     resetScrapeBtn();
                     toast('✅ Article sauvegardé localement !', 'success');
+                    try { navigator.vibrate(400); } catch(_) {}
                     showNativeNotification('📰 Article téléchargé', scraped.title, articleId);
                     renderHistory();
                     openArticleById(articleId);

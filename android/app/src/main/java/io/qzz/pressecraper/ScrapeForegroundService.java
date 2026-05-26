@@ -9,6 +9,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.os.VibratorManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -765,7 +769,33 @@ public class ScrapeForegroundService extends Service {
             .build();
     }
 
+    private void vibratePhone() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                VibratorManager vm = (VibratorManager) getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+                if (vm != null) {
+                    Vibrator v = vm.getDefaultVibrator();
+                    if (v != null && v.hasVibrator()) {
+                        v.vibrate(VibrationEffect.createOneShot(400, VibrationEffect.DEFAULT_AMPLITUDE));
+                    }
+                }
+            } else {
+                Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+                if (v != null && v.hasVibrator()) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        v.vibrate(VibrationEffect.createOneShot(400, VibrationEffect.DEFAULT_AMPLITUDE));
+                    } else {
+                        v.vibrate(400);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Vibrate failed: " + e.getMessage());
+        }
+    }
+
     private void showFinalNotification(String title, String body, String articleId) {
+        vibratePhone();
         Intent intent = new Intent(this, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         if (articleId != null && !articleId.isEmpty()) {

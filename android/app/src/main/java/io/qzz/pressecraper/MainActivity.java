@@ -51,7 +51,7 @@ public class MainActivity extends BridgeActivity {
                 String sharedTitle = intent.getStringExtra(Intent.EXTRA_SUBJECT);
                 if (sharedText != null) {
                     Log.i(TAG, "SEND text: " + sharedText);
-                    // Start background service for headless scraping
+                    // Start background service for headless scraping (no notifyJs — stays in background)
                     try {
                         Intent serviceIntent = new Intent(this, ScrapeForegroundService.class);
                         serviceIntent.putExtra("url", sharedText);
@@ -59,7 +59,6 @@ public class MainActivity extends BridgeActivity {
                     } catch (Exception e) {
                         Log.e(TAG, "Failed to start ScrapeForegroundService: " + e.getMessage());
                     }
-                    notifyJs("sharedText", sharedText);
                 }
             }
         } else if (Intent.ACTION_PROCESS_TEXT.equals(action)) {
@@ -74,7 +73,6 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception e) {
                     Log.e(TAG, "Failed to start ScrapeForegroundService: " + e.getMessage());
                 }
-                notifyJs("sharedText", text);
                 Intent resultIntent = new Intent();
                 resultIntent.putExtra(Intent.EXTRA_PROCESS_TEXT, text);
                 setResult(RESULT_OK, resultIntent);
@@ -90,7 +88,6 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception e) {
                     Log.e(TAG, "Failed to start ScrapeForegroundService: " + e.getMessage());
                 }
-                notifyJs("sharedUrl", url);
             }
         }
     }
