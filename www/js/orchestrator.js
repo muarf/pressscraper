@@ -177,9 +177,25 @@
             try {
                 const urlObj = new URL(url);
                 const pathSegments = urlObj.pathname.split('/').filter(Boolean);
-                let slug = pathSegments.pop() || '';
+                
+                let slug = '';
+                for (let i = pathSegments.length - 1; i >= 0; i--) {
+                    const segment = pathSegments[i];
+                    if (segment && !/^\d+$/.test(segment) && /[a-zA-Z]/.test(segment)) {
+                        slug = segment;
+                        break;
+                    }
+                }
+                if (!slug && pathSegments.length > 0) {
+                    slug = pathSegments[pathSegments.length - 1];
+                }
+                
                 slug = slug.replace(/\.html?$/, '');
                 if (slug.includes('_')) slug = slug.split('_')[0];
+                
+                // Supprimer un UUID à la fin du slug (ex: Ouest-France)
+                slug = slug.replace(/-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i, '');
+                
                 articleTitle = slug.replace(/[-]/g, ' ').replace(/\s+\d{2,}\s*$/g, '').trim();
             } catch (e) {}
         }
