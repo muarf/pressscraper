@@ -252,14 +252,14 @@
                     onProgress('PressReader', 'Authentification...', 10);
                     let articleId = null;
                     if (isUrl) {
-                        articleId = PressReaderService.extractArticleIdFromUrl(titleOrUrl);
+                        articleId = PressReader.extractArticleIdFromUrl(titleOrUrl);
                     }
 
                     if (articleId) {
                         onProgress('PressReader', 'Téléchargement...', 40);
                         const referer = state.pressReaderReferer || 'https://mabm.toulouse-metropole.fr/default/presse.aspx?_lg=fr-FR';
                         const article = await service.fetchArticle(articleId, referer, UA);
-                        const finalHtml = PressReaderService.articleToHtml(article);
+                        const finalHtml = PressReader.articleToHtml(article);
                         onProgress('PressReader', 'Succès !', 95);
                         return {
                             html: finalHtml,
@@ -284,15 +284,24 @@
                         );
                         if (!items || items.length === 0) continue;
 
-                        const { bestMatch, maxSim } = findBestMatch(items, extractedTitle);
-                        if (!bestMatch || maxSim < 35) {
-                            console.warn(`[PressReader] Similarité insuffisante: ${maxSim}%`);
-                            continue;
+                        let bestMatch = null;
+                        let maxSim = 0;
+                        if (isUrl) {
+                            const match = findBestMatch(items, extractedTitle);
+                            bestMatch = match.bestMatch;
+                            maxSim = match.maxSim;
+                            if (!bestMatch || maxSim < 35) {
+                                console.warn(`[PressReader] Similarité insuffisante: ${maxSim}%`);
+                                continue;
+                            }
+                        } else {
+                            bestMatch = items[0];
+                            maxSim = 100;
                         }
 
                         onProgress('PressReader', `Meilleur match (${maxSim}%)`, 70);
                         const article = await service.fetchArticle(bestMatch.id, referer, UA);
-                        const finalHtml = PressReaderService.articleToHtml(article);
+                        const finalHtml = PressReader.articleToHtml(article);
                         onProgress('PressReader', 'Succès !', 95);
                         return {
                             html: finalHtml,
@@ -343,10 +352,19 @@
                         );
                         if (!searchRes || searchRes.length === 0) continue;
 
-                        const { bestMatch, maxSim } = findBestMatch(searchRes, extractedTitle);
-                        if (!bestMatch || maxSim < 35) {
-                            console.warn(`[Cafeyn] Similarité insuffisante: ${maxSim}%`);
-                            continue;
+                        let bestMatch = null;
+                        let maxSim = 0;
+                        if (isUrl) {
+                            const match = findBestMatch(searchRes, extractedTitle);
+                            bestMatch = match.bestMatch;
+                            maxSim = match.maxSim;
+                            if (!bestMatch || maxSim < 35) {
+                                console.warn(`[Cafeyn] Similarité insuffisante: ${maxSim}%`);
+                                continue;
+                            }
+                        } else {
+                            bestMatch = searchRes[0];
+                            maxSim = 100;
                         }
 
                         onProgress('Cafeyn', `Meilleur match (${maxSim}%)`, 70);
@@ -383,10 +401,19 @@
                     const results = await service.search(query, authHeaders, onProgress);
                     if (!results || results.length === 0) continue;
 
-                    const { bestMatch, maxSim } = findBestMatch(results, extractedTitle);
-                    if (!bestMatch || maxSim < 20) {
-                        console.warn(`[Europresse] Similarité insuffisante: ${maxSim}%`);
-                        continue;
+                    let bestMatch = null;
+                    let maxSim = 0;
+                    if (isUrl) {
+                        const match = findBestMatch(results, extractedTitle);
+                        bestMatch = match.bestMatch;
+                        maxSim = match.maxSim;
+                        if (!bestMatch || maxSim < 20) {
+                            console.warn(`[Europresse] Similarité insuffisante: ${maxSim}%`);
+                            continue;
+                        }
+                    } else {
+                        bestMatch = results[0];
+                        maxSim = 100;
                     }
 
                     onProgress('BnF Europresse', `Meilleur match (${maxSim}%)`, 70);

@@ -674,19 +674,23 @@
                         let bestMatch = null;
                         let maxSim = 0;
 
-                        items.forEach(item => {
-                            if (item.formattedUrl && item.title) {
-                                const sim = calculateSimilarity(originalTitle, item.title);
-                                if (sim > maxSim) {
-                                    maxSim = sim;
-                                    bestMatch = item;
+                        if (isUrl) {
+                            items.forEach(item => {
+                                if (item.formattedUrl && item.title) {
+                                    const sim = calculateSimilarity(originalTitle, item.title);
+                                    if (sim > maxSim) {
+                                        maxSim = sim;
+                                        bestMatch = item;
+                                    }
                                 }
-                            }
-                        });
+                            });
 
-                        if (!bestMatch || maxSim < 35) {
-                            console.warn('[Cafeyn] Aucun article avec une similarité suffisante trouvé (maxSim: ' + maxSim + '%)');
-                            continue;
+                            if (!bestMatch || maxSim < 35) {
+                                console.warn('[Cafeyn] Aucun article avec une similarité suffisante trouvé (maxSim: ' + maxSim + '%)');
+                                continue;
+                            }
+                        } else {
+                            bestMatch = items[0];
                         }
 
                         onProgress('Cafeyn', `Téléchargement de l'article...`, 70);
@@ -785,19 +789,23 @@
                         let bestMatch = null;
                         let maxSim = 0;
 
-                        items.forEach(item => {
-                            if (item.id && item.title) {
-                                const sim = calculateSimilarity(originalTitle, item.title);
-                                if (sim > maxSim) {
-                                    maxSim = sim;
-                                    bestMatch = item;
+                        if (isUrl) {
+                            items.forEach(item => {
+                                if (item.id && item.title) {
+                                    const sim = calculateSimilarity(originalTitle, item.title);
+                                    if (sim > maxSim) {
+                                        maxSim = sim;
+                                        bestMatch = item;
+                                    }
                                 }
-                            }
-                        });
+                            });
 
-                        if (!bestMatch || maxSim < 35) {
-                            console.warn('[PressReader] Aucun article avec une similarité suffisante trouvé (maxSim: ' + maxSim + '%)');
-                            continue;
+                            if (!bestMatch || maxSim < 35) {
+                                console.warn('[PressReader] Aucun article avec une similarité suffisante trouvé (maxSim: ' + maxSim + '%)');
+                                continue;
+                            }
+                        } else {
+                            bestMatch = items[0];
                         }
 
                         onProgress('PressReader', `Téléchargement de l'article...`, 70);

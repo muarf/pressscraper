@@ -116,12 +116,33 @@ public class CafeynLoginPlugin extends Plugin {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                Log.i(TAG, "shouldOverrideUrlLoading: " + url);
+                if (hasCafeynToken(url)) {
+                    handleLoginSuccess(url);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, android.webkit.WebResourceRequest request) {
+                String url = request.getUrl().toString();
+                Log.i(TAG, "shouldOverrideUrlLoading (request): " + url);
+                if (hasCafeynToken(url)) {
+                    handleLoginSuccess(url);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                Log.d(TAG, "Page finished: " + url);
+                Log.i(TAG, "Page finished: " + url);
 
-                // Check if redirected to cafeyn (login succeeded)
-                if (url.contains("cafeyn") && !url.contains("login")) {
+                // Check if redirected to cafeyn with token (login succeeded)
+                if (hasCafeynToken(url)) {
                     handleLoginSuccess(url);
                     return;
                 }
@@ -150,8 +171,9 @@ public class CafeynLoginPlugin extends Plugin {
                 if (url.contains("auth/login") || url.contains("mediatheques")) {
                     String jsCode =
                         "(function() {" +
-                        "  var u = document.querySelector(\"input[type='text'], input[id*='user'], input[name*='user'], input[name='username'], input[name='j_username'], input[placeholder*='Numéro'], input[placeholder*='card'], input[placeholder*='Identifiant']\");" +
-                        "  var p = document.querySelector(\"input[type='password'], input[name='j_password'], input[name='password']\");" +
+                        "  var inputs = Array.from(document.querySelectorAll('input'));" +
+                        "  var u = inputs.find(i => i.name === 'username' && i.offsetParent !== null);" +
+                        "  var p = inputs.find(i => i.name === 'password' && i.offsetParent !== null);" +
                         "  if (u && p) {" +
                         "    u.value = '" + safeUsername + "';" +
                         "    u.dispatchEvent(new Event('input', {bubbles: true}));" +
@@ -159,10 +181,10 @@ public class CafeynLoginPlugin extends Plugin {
                         "    p.value = '" + safePassword + "';" +
                         "    p.dispatchEvent(new Event('input', {bubbles: true}));" +
                         "    p.dispatchEvent(new Event('change', {bubbles: true}));" +
-                        "    var btn = document.querySelector(\"input[type='submit'], button[type='submit'], button.submit, .btn-primary, .btn, [type='submit']\");" +
-                        "    if (btn) { btn.click(); return 'submitted'; }" +
-                        "    var form = document.querySelector('form');" +
-                        "    if (form) { form.submit(); return 'submitted'; }" +
+                        "    var btn = inputs.find(i => i.type === 'submit' && i.name === 'login' && i.offsetParent !== null);" +
+                        "    if (btn) { btn.click(); return 'submitted_click'; }" +
+                        "    var form = u.closest('form');" +
+                        "    if (form) { form.submit(); return 'submitted_form'; }" +
                         "    return 'no_submit';" +
                         "  }" +
                         "  return 'no_fields';" +
@@ -184,10 +206,30 @@ public class CafeynLoginPlugin extends Plugin {
         }
 
         CookieManager cookieManager = CookieManager.getInstance();
-        String cookiesStr = cookieManager.getCookie("https://" + CAFEYN_DOMAIN);
+        String cookiesStr = cookieManager.getCookie(url);
+        if (cookiesStr == null || cookiesStr.isEmpty()) {
+            cookiesStr = cookieManager.getCookie("https://" + CAFEYN_DOMAIN);
+        }
+        if (cookiesStr == null || cookiesStr.isEmpty()) {
+            cookiesStr = cookieManager.getCookie("https://mediatheques.sudestavenir.fr");
+        }
         Log.d(TAG, "Cookies: " + (cookiesStr != null ? cookiesStr.substring(0, Math.min(200, cookiesStr.length())) + "..." : "null"));
 
         JSObject result = new JSObject();
+        String jwt = null;
+
+        // Try extracting token query parameter from final redirect url first
+        if (url != null && url.contains("token=")) {
+            try {
+                android.net.Uri uri = android.net.Uri.parse(url);
+                jwt = uri.getQueryParameter("token");
+                if (jwt != null && !jwt.isEmpty()) {
+                    Log.d(TAG, "Extracted JWT token from redirected URL query param: " + jwt.substring(0, Math.min(20, jwt.length())) + "...");
+                }
+            } catch (Exception ue) {
+                Log.w(TAG, "Could not parse token from redirect URL: " + ue.getMessage());
+            }
+        }
 
         if (cookiesStr != null && !cookiesStr.isEmpty()) {
             try {
@@ -207,13 +249,16 @@ public class CafeynLoginPlugin extends Plugin {
                 result.put("success", true);
                 result.put("cookies", cookieArray);
                 result.put("cookieHeader", cookiesStr);
-                // Also return the JWT token if available
-                String[] cookiePairs = cookiesStr.split(";");
-                for (String pair : cookiePairs) {
-                    if (pair.contains("Cafeyn_authtoken_V2")) {
-                        String[] parts = pair.trim().split("=", 2);
-                        if (parts.length == 2) {
-                            result.put("jwt", parts[1].trim());
+                
+                // Get JWT token from cookies if not extracted from URL yet
+                if (jwt == null) {
+                    String[] cookiePairs = cookiesStr.split(";");
+                    for (String pair : cookiePairs) {
+                        if (pair.contains("Cafeyn_authtoken_V2")) {
+                            String[] parts = pair.trim().split("=", 2);
+                            if (parts.length == 2) {
+                                jwt = parts[1].trim();
+                            }
                         }
                     }
                 }
@@ -221,9 +266,14 @@ public class CafeynLoginPlugin extends Plugin {
                 result.put("success", false);
                 result.put("error", "Cookie parsing error: " + e.getMessage());
             }
-        } else {
+        }
+
+        if (jwt != null && !jwt.isEmpty()) {
+            result.put("success", true);
+            result.put("jwt", jwt);
+        } else if (result.optBoolean("success", false) == false) {
             result.put("success", false);
-            result.put("error", "No cookies found after login");
+            result.put("error", "No cookies or token found after login");
         }
 
         cleanup();
@@ -248,6 +298,22 @@ public class CafeynLoginPlugin extends Plugin {
             pendingCall.resolve(result);
             pendingCall = null;
         }
+    }
+
+    private boolean hasCafeynToken(String url) {
+        if (url != null && url.contains("token=")) {
+            return true;
+        }
+        CookieManager cookieManager = CookieManager.getInstance();
+        String cookiesStr = cookieManager.getCookie("https://" + CAFEYN_DOMAIN);
+        if (cookiesStr != null && cookiesStr.contains("Cafeyn_authtoken_V2")) {
+            return true;
+        }
+        String cookiesStr2 = cookieManager.getCookie("https://www.cafeyn.co");
+        if (cookiesStr2 != null && cookiesStr2.contains("Cafeyn_authtoken_V2")) {
+            return true;
+        }
+        return false;
     }
 
     private void cleanup() {

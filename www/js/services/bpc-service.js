@@ -349,10 +349,12 @@
         iframeWindow.refreshCurrentTab = function() {};
         iframeWindow.refreshCurrentTab_bg = function() {};
 
+        iframeWindow.pendingAsyncRequests = 0;
         iframeWindow.data_ext_fetch_id = 0;
         iframeWindow.data_ext_fetch = [];
 
         iframeWindow.getExtFetch = async function(url, json_key = '', options = {}, callback, data_ext_fetch_id = 0, args = []) {
+            iframeWindow.pendingAsyncRequests++;
             try {
                 console.log('[BPC BRIDGE] getExtFetch:', url);
                 const BnfLogin = window.parent.Capacitor?.Plugins?.BnfLogin || window.Capacitor?.Plugins?.BnfLogin;
@@ -376,9 +378,11 @@
                     if (callback) callback(url, null, ...args);
                 }
             } catch (e) { console.error('[BPC BRIDGE] getExtFetch error:', e); if (callback) callback(url, null, ...args); }
+            finally { iframeWindow.pendingAsyncRequests--; }
         };
 
         iframeWindow.replaceDomElementExt = async function(url, proxy, base64, selector, text_fail = '', selector_source = selector, selector_archive = selector) {
+            iframeWindow.pendingAsyncRequests++;
             try {
                 console.log('[BPC BRIDGE] replaceDomElementExt:', url);
                 const BnfLogin = window.parent.Capacitor?.Plugins?.BnfLogin || window.Capacitor?.Plugins?.BnfLogin;
@@ -401,6 +405,7 @@
                     }
                 }
             } catch (e) { console.error('[BPC BRIDGE] replaceDomElementExt error:', e); }
+            finally { iframeWindow.pendingAsyncRequests--; }
         };
 
         iframeWindow.getArchive = function(url, paywall_sel, paywall_action = '', selector, text_fail = '', selector_source = selector, selector_archive = selector) {
@@ -414,29 +419,38 @@
         };
 
         iframeWindow.fetch = async function(resource, init) {
-            let url = (typeof resource === 'string') ? resource : resource.url;
-            console.log('[BPC BRIDGE] fetch override intercepted:', url);
-            if (url.startsWith('http') && !url.includes(iframeWindow.location.host)) {
-                const BnfLogin = window.parent.Capacitor?.Plugins?.BnfLogin || window.Capacitor?.Plugins?.BnfLogin;
-                if (BnfLogin) {
-                    try {
-                        let headers = {};
-                        if (init && init.headers) {
-                            if (init.headers instanceof Headers) init.headers.forEach((value, key) => { headers[key] = value; });
-                            else if (typeof init.headers === 'object') headers = init.headers;
-                        }
-                        headers['User-Agent'] = customUA;
-                        let body = null;
-                        if (init && init.body) body = init.body;
-                        const res = await BnfLogin.httpRequest({ url, method: (init && init.method) || 'GET', headers, body });
-                        return { ok: res.status >= 200 && res.status < 300, status: res.status, statusText: 'OK', text: async () => res.data, json: async () => JSON.parse(res.data) };
-                    } catch (e) { console.error('[BPC BRIDGE] Fetch redirect failed:', e); throw e; }
+            iframeWindow.pendingAsyncRequests++;
+            try {
+                let url = (typeof resource === 'string') ? resource : resource.url;
+                console.log('[BPC BRIDGE] fetch override intercepted:', url);
+                if (url.startsWith('http') && !url.includes(iframeWindow.location.host)) {
+                    const BnfLogin = window.parent.Capacitor?.Plugins?.BnfLogin || window.Capacitor?.Plugins?.BnfLogin;
+                    if (BnfLogin) {
+                        try {
+                            let headers = {};
+                            if (init && init.headers) {
+                                if (init.headers instanceof Headers) init.headers.forEach((value, key) => { headers[key] = value; });
+                                else if (typeof init.headers === 'object') headers = init.headers;
+                            }
+                            headers['User-Agent'] = customUA;
+                            let body = null;
+                            if (init && init.body) body = init.body;
+                            const res = await BnfLogin.httpRequest({ url, method: (init && init.method) || 'GET', headers, body });
+                            return { ok: res.status >= 200 && res.status < 300, status: res.status, statusText: 'OK', text: async () => res.data, json: async () => JSON.parse(res.data) };
+                        } catch (e) { console.error('[BPC BRIDGE] Fetch redirect failed:', e); throw e; }
+                    }
                 }
+                return window.parent.fetch(resource, init);
+            } finally {
+                iframeWindow.pendingAsyncRequests--;
             }
-            return window.parent.fetch(resource, init);
         };
 
-        iframeWindow.DOMPurify = { sanitize: (x, y = '') => x, removed: [] };
+        const dompurifyMock = function(x, y = '') { return x; };
+        dompurifyMock.sanitize = (x, y = '') => x;
+        dompurifyMock.removed = [];
+        iframeWindow.DOMPurify = dompurifyMock;
+
 
         const bootstrapScript = iframeDocument.createElement('script');
         bootstrapScript.text = `
@@ -457,7 +471,24 @@
                 }
             })(window.__windowProxy__, window.__windowProxy__, window.__windowProxy__, window.__documentProxy__, window.__locationProxy__);
         `;
+
+        // bootstrapScript must be appended FIRST so getExtFetch, DOMPurify, etc. are defined
         iframeDocument.head.appendChild(bootstrapScript);
+
+        // Apply a site-specific mobile override if one is registered in bpc-mobile-overrides.js.
+        // On mobile, pages are fetched without a user session, so BPC paywall conditions often
+        // don't fire (the paywall DOM elements are absent from anonymous page loads).
+        // Overrides bypass this by calling the site's native API directly.
+        if (typeof window.BpcMobileOverrides !== 'undefined') {
+            const mobileOverrideCode = window.BpcMobileOverrides.getOverrideScript(articleUrl);
+            if (mobileOverrideCode) {
+                console.log('[BPC] Applying mobile override for:', articleDomain);
+                const mobileOverrideScript = iframeDocument.createElement('script');
+                mobileOverrideScript.text = mobileOverrideCode;
+                iframeDocument.head.appendChild(mobileOverrideScript);
+            }
+        }
+
 
         onProgress('Bypass Direct', 'Déverrouillage de l\'article...', 60);
 
@@ -477,6 +508,7 @@
         else if (articleDomain.includes('lesoir.be')) contentSelector = '.r-content, article.r-article';
         else if (articleDomain.includes('lamontagne.fr') || articleDomain.includes('lepopulaire.fr') || articleDomain.includes('larep.fr') || articleDomain.includes('le-pays.fr')) contentSelector = 'div#content section > div.flex-col';
         else if (articleDomain.includes('letemps.ch')) contentSelector = 'div#article-body-wrapper';
+        else if (articleDomain.includes('courrierinternational.com')) contentSelector = 'div.article-text';
 
         const paywallSelector = 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget, meta[name="premium"][content="true"], div.post-subscribe, div.post__content--faded';
 
@@ -489,6 +521,10 @@
                 if (!contentEl) contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article');
                 const hasPaywall = iframeDocument.querySelector(paywallSelector);
                 const textLength = contentEl ? contentEl.textContent.trim().length : 0;
+                
+                // Track pending BPC async request count (e.g. getExtFetch from Courrier International)
+                const pendingAsync = iframeWindow.pendingAsyncRequests || 0;
+
                 if (articleDomain === 'lemonde.fr') {
                     const hasParagraphs = iframeDocument.querySelectorAll('.article__paragraph').length >= 3;
                     const paywallGone = !iframeDocument.querySelector('section.lmd-paywall');
@@ -502,7 +538,7 @@
                     const paywallGone = !iframeDocument.querySelector('div.paywall');
                     if (leftSection && leftSection.textContent.length > 800 && paywallGone) bypassSuccess = true;
                 } else {
-                    if (!hasPaywall && textLength > 800) bypassSuccess = true;
+                    if (!hasPaywall && textLength > 800 && pendingAsync === 0) bypassSuccess = true;
                 }
                 if (bypassSuccess || elapsed >= maxWaitTime) { clearInterval(timer); resolve(); }
             }, checkInterval);
