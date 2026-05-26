@@ -2,8 +2,8 @@
     'use strict';
 
     const GITHUB_REPO = 'muarf/pressscraper';
-    const GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO + '/releases/latest';
-    const APK_FILENAME = 'presse-scraper-update.apk';
+    const GITHUB_BETA_API = 'https://api.github.com/repos/' + GITHUB_REPO + '/releases?per_page=10';
+    const APK_FILENAME = 'presscraper-*.apk';
     const CHECK_KEY = 'update_last_check';
 
     let updateState = {
@@ -29,7 +29,7 @@
         return { name: '0.0.0', code: 0 };
     }
 
-    async function checkForUpdates(force) {
+    async function checkForBetaUpdates(force) {
         if (updateState.checking) return;
         if (!force) {
             const lastCheck = localStorage.getItem(CHECK_KEY);
@@ -40,46 +40,45 @@
 
         updateState.checking = true;
         try {
-            const res = await fetch(GITHUB_API, {
+            const res = await fetch(GITHUB_BETA_API, {
                 headers: { 'Accept': 'application/vnd.github.v3+json' }
             });
             if (!res.ok) return;
-            const data = await res.json();
+            const releases = await res.json();
+            if (!Array.isArray(releases) || releases.length === 0) return;
 
-            const latestTag = data.tag_name || '';
+            // Find the latest prerelease with an APK asset
+            const beta = releases.find(r =>
+                r.prerelease && r.assets && r.assets.some(a => a.name && a.name.endsWith('.apk'))
+            );
+            if (!beta) return;
+
             const current = await getCurrentVersion();
-
+            const latestTag = beta.tag_name || '';
             updateState.latestVersion = latestTag;
-            updateState.releaseUrl = data.html_url || '';
+            updateState.releaseUrl = beta.html_url || '';
 
-            // Find APK asset
-            if (data.assets && data.assets.length) {
-                const apkAsset = data.assets.find(a => a.name && a.name.endsWith('.apk'));
-                if (apkAsset) {
-                    updateState.downloadUrl = apkAsset.browser_download_url;
-                }
+            const apkAsset = beta.assets.find(a => a.name && a.name.endsWith('.apk'));
+            if (apkAsset) {
+                updateState.downloadUrl = apkAsset.browser_download_url;
             }
 
-            // Compare versions (tags like v1.2.3)
-            const latestStr = latestTag.replace(/^v/, '');
-            const currentStr = current.name.replace(/^v/, '');
-            const latestParts = latestStr.split('.').map(Number);
-            const currentParts = currentStr.split('.').map(Number);
+            // Compare versions
+            const latestStr = latestTag.replace(/^v/, '').split(/[.-]/).map(Number);
+            const currentStr = current.name.replace(/^v/, '').split(/[.-]/).map(Number);
 
             let isNewer = false;
-            for (let i = 0; i < Math.max(latestParts.length, currentParts.length); i++) {
-                const l = latestParts[i] || 0;
-                const c = currentParts[i] || 0;
+            for (let i = 0; i < Math.max(latestStr.length, currentStr.length); i++) {
+                const l = latestStr[i] || 0;
+                const c = currentStr[i] || 0;
                 if (l > c) { isNewer = true; break; }
                 if (l < c) break;
             }
 
             updateState.available = isNewer;
-
             localStorage.setItem(CHECK_KEY, String(Date.now()));
-
         } catch(e) {
-            console.warn('[Updater] Check failed:', e);
+            console.warn('[Updater] Beta check failed:', e);
         } finally {
             updateState.checking = false;
         }
@@ -106,7 +105,7 @@
     }
 
     global.Updater = {
-        checkForUpdates,
+        checkForBetaUpdates,
         downloadAndInstall,
         state: updateState
     };

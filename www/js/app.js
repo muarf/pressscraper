@@ -186,7 +186,16 @@
         // 3. Afficher la version
         window.showAppVersion();
 
-        // 4. Décider quel écran afficher
+        // 4. Vérifier les mises à jour bêta
+        if (typeof window.Updater !== 'undefined' && typeof window.Capacitor !== 'undefined') {
+            window.Updater.checkForBetaUpdates(false).then(() => {
+                if (window.Updater.state.available) {
+                    showUpdatePrompt();
+                }
+            });
+        }
+
+        // 5. Décider quel écran afficher
         // Appliquer le thème et la taille de police
         window.setTheme(state.theme || 'dark');
         applyFontSize(state.articleFontSize || 16);
@@ -1355,7 +1364,43 @@
         }
     }
 
-    // ===== VERSION =====
+    // ===== AUTO-UPDATE (Bêta) =====
+    window.showUpdatePrompt = function() {
+        const latest = window.Updater.state.latestVersion;
+        const toastEl = document.getElementById('toast');
+        document.getElementById('toastText').innerHTML = `Mise à jour bêta : ${latest} <span style="text-decoration:underline;cursor:pointer;font-weight:700;" onclick="applyUpdate()">Télécharger</span>`;
+        toastEl.className = 'toast show';
+        clearTimeout(window._toastTimer);
+    };
+
+    window.applyUpdate = async function() {
+        const toastEl = document.getElementById('toast');
+        toastEl.classList.remove('show');
+        toast('Téléchargement de la mise à jour...', '');
+        try {
+            await window.Updater.downloadAndInstall();
+            toast('Installation en cours...', 'success');
+        } catch(e) {
+            toast('Échec: ' + e.message, 'error');
+        }
+    };
+
+    window.manualUpdateCheck = async function() {
+        const statusEl = document.getElementById('updateStatusText');
+        statusEl.textContent = 'Vérification...';
+        try {
+            await window.Updater.checkForBetaUpdates(true);
+            if (window.Updater.state.available) {
+                statusEl.textContent = 'Bêta disponible : ' + window.Updater.state.latestVersion;
+                showUpdatePrompt();
+            } else {
+                statusEl.textContent = 'Dernière version bêta : ' + window.Updater.state.latestVersion + ' (à jour)';
+            }
+        } catch(e) {
+            statusEl.textContent = 'Erreur: ' + e.message;
+        }
+    };
+
     window.showAppVersion = async function() {
         const el = document.getElementById('appVersionText');
         if (!el) return;
