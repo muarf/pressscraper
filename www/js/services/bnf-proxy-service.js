@@ -7,7 +7,7 @@
             proxyHost: 'www-mediapart-fr.bnf.idm.oclc.org',
             name: 'Mediapart',
             contentSelector: '.paywall-restricted-content, .news__body__center__article, .content-article, .article__content, [data-module="article-body"], .article-body',
-            paywallSelector: '.paywall, #paywall, [class*="paywall"], .register-wall, .subscribe'
+            paywallSelector: '#paywall, [class*="paywall"]:not(.paywall-restricted-content), .register-wall, .subscribe'
         },
         {
             domains: ['arretsurimages.net', 'www.arretsurimages.net'],
@@ -167,6 +167,34 @@
             const html = pageRes.data || '';
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
+
+            // DEBUG: cherche le contenu article caché dans le HTML
+            try {
+                const ldJsonMatches = html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+                for (const m of ldJsonMatches) {
+                    try {
+                        const ldData = JSON.parse(m[1]);
+                        const texts = [];
+                        if (ldData.articleBody) texts.push('articleBody');
+                        if (ldData.description) texts.push('description');
+                        if (ldData.text) texts.push('text');
+                        console.log('[BnF Proxy] DEBUG ld+json keys:', Object.keys(ldData).join(','), 'found:', texts.join(','));
+                        if (ldData.articleBody) {
+                            console.log('[BnF Proxy] DEBUG articleBody length:', ldData.articleBody.length, 'preview:', ldData.articleBody.substring(0, 200));
+                        }
+                    } catch(e) {}
+                }
+                // Cherche des gros blocs de texte dans les scripts
+                const allScripts = doc.querySelectorAll('script');
+                for (const s of allScripts) {
+                    const t = (s.textContent || '').trim();
+                    if (t.length > 1000 && /article|content|text|body/i.test(t.substring(0, 200))) {
+                        console.log('[BnF Proxy] DEBUG large script:', (s.id || s.type || 'no-id'), 'length:', t.length, 'preview:', t.substring(0, 300));
+                    }
+                }
+            } catch (e) {
+                console.warn('[BnF Proxy] DEBUG content search error:', e.message);
+            }
 
             const oclcUsernameInput = doc.querySelector('input[name="j_username"]');
             const oclcPasswordInput = doc.querySelector('input[name="j_password"]');
