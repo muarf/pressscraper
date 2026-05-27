@@ -282,7 +282,7 @@
         const UA = await getUA();
 
         // Build prioritized list of (connector, service) pairs from registry
-        const providerOrder = state.providerOrder || ['bpc', 'bnf-proxy', 'pressreader', 'cafeyn', 'bnf'];
+        const providerOrder = state.providerOrder || ['bpc', 'pressreader', 'cafeyn', 'bnf'];
         const providerEnabled = state.providerEnabled || {};
 
         // Map provider IDs to registry pair IDs
@@ -300,6 +300,20 @@
             .filter(Boolean)
             .map(id => global.Registry.getPair(id))
             .filter(Boolean);
+
+        // Inject bnf-proxy dynamically if BnF is enabled and URL matches Mediapart/ASI
+        if (isUrl && providerEnabled['bnf'] !== false) {
+            const bnfProxyPair = global.Registry.getPair('bnf-proxy');
+            if (bnfProxyPair && bnfProxyPair.service?.supportsUrl?.(titleOrUrl)) {
+                const alreadyIn = pairs.some(p => p.id === 'bnf-proxy');
+                if (!alreadyIn) {
+                    // Insert after the last bnf-related pair, or at end
+                    const bnfIdx = pairs.findIndex(p => p.id === 'bnf');
+                    pairs.splice(bnfIdx >= 0 ? bnfIdx + 1 : pairs.length, 0, bnfProxyPair);
+                    console.log('[ORCH] bnf-proxy injecté pour', titleOrUrl);
+                }
+            }
+        }
 
         if (pairs.length === 0) {
             throw new Error('Aucun fournisseur activé. Vérifiez vos paramètres.');

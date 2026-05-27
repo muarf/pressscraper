@@ -71,11 +71,10 @@
     // ===== ÉTAT GLOBAL =====
     let state = {
         // Ordre des providers (priorité de scraping)
-        providerOrder: ['bpc', 'bnf-proxy', 'pressreader', 'cafeyn', 'bnf'],
+        providerOrder: ['bpc', 'pressreader', 'cafeyn', 'bnf'],
         // Providers activés/désactivés
         providerEnabled: {
             bnf: true,
-            'bnf-proxy': true,
             cafeyn: true,
             pressreader: true,
             bpc: true
@@ -125,19 +124,14 @@
                 }
                 // Migration v2 : réordonner si l'ordre commence encore par 'bnf' (ancienne valeur par défaut)
                 if (parsed.providerOrder && parsed.providerOrder[0] === 'bnf') {
-                    parsed.providerOrder = ['bpc', 'bnf-proxy', 'pressreader', 'cafeyn', 'bnf'];
+                    parsed.providerOrder = ['bpc', 'pressreader', 'cafeyn', 'bnf'];
                     console.log('[MIGRATE] providerOrder réinitialisé à bpc-first');
                 }
-                // Migration v3 : insérer bnf-proxy s'il manque
-                if (parsed.providerOrder && !parsed.providerOrder.includes('bnf-proxy')) {
-                    const idx = parsed.providerOrder.indexOf('pressreader');
-                    if (idx !== -1) {
-                        parsed.providerOrder.splice(idx, 0, 'bnf-proxy');
-                    } else {
-                        parsed.providerOrder.push('bnf-proxy');
-                    }
-                    parsed.providerEnabled['bnf-proxy'] = true;
-                    console.log('[MIGRATE] bnf-proxy ajouté à providerOrder');
+                // Migration v3 : retirer bnf-proxy de la config (géré automatiquement par l'orchestrateur)
+                if (parsed.providerOrder && parsed.providerOrder.includes('bnf-proxy')) {
+                    parsed.providerOrder = parsed.providerOrder.filter(p => p !== 'bnf-proxy');
+                    delete parsed.providerEnabled['bnf-proxy'];
+                    console.log('[MIGRATE] bnf-proxy retiré de la config');
                 }
                 Object.assign(state, parsed);
             }
@@ -147,7 +141,7 @@
     function save() {
         // Persister les données non-sensibles dans localStorage
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            providerOrder: state.providerOrder || ['bpc', 'bnf-proxy', 'pressreader', 'cafeyn', 'bnf'],
+            providerOrder: state.providerOrder || ['bpc', 'pressreader', 'cafeyn', 'bnf'],
             providerEnabled: state.providerEnabled || {},
             bnfCookies: state.bnfCookies,
             bnfCookiesHeader: state.bnfCookiesHeader,
