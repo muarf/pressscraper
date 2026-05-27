@@ -8,6 +8,63 @@
 (function() {
     'use strict';
 
+    // ===== DEBUG LOG BUFFER =====
+    const DEBUG_LOG_MAX = 100;
+    const debugLogs = [];
+
+    function addLog(level, args) {
+        try {
+            const msg = Array.from(args).map(a =>
+                typeof a === 'object' ? (a.message || JSON.stringify(a).substring(0, 300)) : String(a)
+            ).join(' ');
+            const ts = new Date().toLocaleTimeString('fr-FR', { hour12: false });
+            debugLogs.unshift('[' + ts + '][' + level + '] ' + msg);
+            if (debugLogs.length > DEBUG_LOG_MAX) debugLogs.length = DEBUG_LOG_MAX;
+        } catch(_) {}
+    }
+
+    // Intercept console methods
+    const origLog = console.log.bind(console);
+    const origWarn = console.warn.bind(console);
+    const origError = console.error.bind(console);
+    console.log = (...a) => { addLog('LOG', a); origLog(...a); };
+    console.warn = (...a) => { addLog('WARN', a); origWarn(...a); };
+    console.error = (...a) => { addLog('ERR', a); origError(...a); };
+
+    window.copyDebugLogs = function() {
+        const text = debugLogs.join('\n');
+        if (!text) { toast('Aucun log disponible', 'error'); return; }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => toast('Logs copiés !', 'success')).catch(() => fallbackCopy(text));
+        } else {
+            fallbackCopy(text);
+        }
+        function fallbackCopy(t) {
+            const ta = document.createElement('textarea');
+            ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); toast('Logs copiés !', 'success'); } catch(_) { toast('Copie impossible', 'error'); }
+            document.body.removeChild(ta);
+        }
+    };
+
+    // Auto-refresh debug display when settings are open
+    let debugRefreshInterval = null;
+    function startDebugRefresh() {
+        stopDebugRefresh();
+        debugRefreshInterval = setInterval(() => {
+            const el = document.getElementById('debugLogDisplay');
+            if (!el || document.getElementById('settingsScreen').classList.contains('hidden')) {
+                stopDebugRefresh();
+                return;
+            }
+            el.textContent = debugLogs.slice(0, 50).join('\n') || '(aucun log)';
+        }, 1000);
+    }
+    function stopDebugRefresh() {
+        if (debugRefreshInterval) { clearInterval(debugRefreshInterval); debugRefreshInterval = null; }
+    }
+
     // ===== CONFIG =====
     const STORAGE_KEY = 'presse_scraper_v3';
 
@@ -407,7 +464,7 @@
         document.querySelector(`.nav-btn[data-screen="${screenId}"]`)?.classList.add('active');
 
         if (screenId === 'historyScreen') renderFullHistory();
-        if (screenId === 'settingsScreen') updateSettingsUI();
+        if (screenId === 'settingsScreen') { updateSettingsUI(); startDebugRefresh(); } else { stopDebugRefresh(); }
     };
 
     // ===== ONBOARDING WIZARD LOGIC =====
