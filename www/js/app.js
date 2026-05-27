@@ -71,10 +71,11 @@
     // ===== ÉTAT GLOBAL =====
     let state = {
         // Ordre des providers (priorité de scraping)
-        providerOrder: ['bpc', 'pressreader', 'cafeyn', 'bnf'],
+        providerOrder: ['bpc', 'bnf-proxy', 'pressreader', 'cafeyn', 'bnf'],
         // Providers activés/désactivés
         providerEnabled: {
             bnf: true,
+            'bnf-proxy': true,
             cafeyn: true,
             pressreader: true,
             bpc: true
@@ -124,8 +125,19 @@
                 }
                 // Migration v2 : réordonner si l'ordre commence encore par 'bnf' (ancienne valeur par défaut)
                 if (parsed.providerOrder && parsed.providerOrder[0] === 'bnf') {
-                    parsed.providerOrder = ['bpc', 'pressreader', 'cafeyn', 'bnf'];
+                    parsed.providerOrder = ['bpc', 'bnf-proxy', 'pressreader', 'cafeyn', 'bnf'];
                     console.log('[MIGRATE] providerOrder réinitialisé à bpc-first');
+                }
+                // Migration v3 : insérer bnf-proxy s'il manque
+                if (parsed.providerOrder && !parsed.providerOrder.includes('bnf-proxy')) {
+                    const idx = parsed.providerOrder.indexOf('pressreader');
+                    if (idx !== -1) {
+                        parsed.providerOrder.splice(idx, 0, 'bnf-proxy');
+                    } else {
+                        parsed.providerOrder.push('bnf-proxy');
+                    }
+                    parsed.providerEnabled['bnf-proxy'] = true;
+                    console.log('[MIGRATE] bnf-proxy ajouté à providerOrder');
                 }
                 Object.assign(state, parsed);
             }
@@ -135,7 +147,7 @@
     function save() {
         // Persister les données non-sensibles dans localStorage
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            providerOrder: state.providerOrder || ['bpc', 'pressreader', 'cafeyn', 'bnf'],
+            providerOrder: state.providerOrder || ['bpc', 'bnf-proxy', 'pressreader', 'cafeyn', 'bnf'],
             providerEnabled: state.providerEnabled || {},
             bnfCookies: state.bnfCookies,
             bnfCookiesHeader: state.bnfCookiesHeader,
@@ -493,7 +505,7 @@
                 state.bnfPassword = password;
                 state.bnfCookies = result.cookies;
                 state.bnfCookiesHeader = result.cookieHeader || '';
-                state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
+                state.bnfCookiesExpiry = Date.now() + (2 * 60 * 60 * 1000);
                 save();
 
                 successEl.textContent = 'Connexion BnF réussie !';
@@ -756,7 +768,7 @@
                         if (result.success && result.cookies) {
                             state.bnfCookies = result.cookies;
                             state.bnfCookiesHeader = result.cookieHeader || '';
-                            state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
+                            state.bnfCookiesExpiry = Date.now() + (2 * 60 * 60 * 1000);
                             save();
                         } else {
                             throw new Error(result.error || 'Reconnexion BnF échouée');
@@ -845,7 +857,7 @@
                         if (result.success && result.cookies) {
                             state.bnfCookies = result.cookies;
                             state.bnfCookiesHeader = result.cookieHeader || '';
-                            state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
+                            state.bnfCookiesExpiry = Date.now() + (2 * 60 * 60 * 1000);
                             save();
                             sessionRetry = true;
                             continue; // Relancer le scraping
@@ -1212,7 +1224,7 @@
             if (result.success && result.cookies) {
                 state.bnfCookies = result.cookies;
                 state.bnfCookiesHeader = result.cookieHeader || '';
-                state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
+                state.bnfCookiesExpiry = Date.now() + (2 * 60 * 60 * 1000);
                 save();
                 updateCookieStatusUI();
                 toast('Session BnF renouvelée', 'success');

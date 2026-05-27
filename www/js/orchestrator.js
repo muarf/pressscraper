@@ -282,7 +282,7 @@
         const UA = await getUA();
 
         // Build prioritized list of (connector, service) pairs from registry
-        const providerOrder = state.providerOrder || ['bpc', 'pressreader', 'cafeyn', 'bnf', 'bnf-proxy'];
+        const providerOrder = state.providerOrder || ['bpc', 'bnf-proxy', 'pressreader', 'cafeyn', 'bnf'];
         const providerEnabled = state.providerEnabled || {};
 
         // Map provider IDs to registry pair IDs
@@ -303,6 +303,37 @@
 
         if (pairs.length === 0) {
             throw new Error('Aucun fournisseur activé. Vérifiez vos paramètres.');
+        }
+
+        // ── BnF session pre-check ──
+        // If cookies are locally valid, verify they're still alive server-side
+        // so both europresse and bnf-proxy start with a fresh session.
+        if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.BnfLogin?.httpRequest) {
+            const bnfConnector = global.BnfConnector;
+            if (bnfConnector && bnfConnector.isReady(state)) {
+                try {
+                    const cookieH = (bnfConnector.getAuthHeaders(state) || {})['Cookie'] || '';
+                    const checkRes = await window.Capacitor.Plugins.BnfLogin.httpRequest({
+                        url: 'https://nouveau-europresse-com.bnf.idm.oclc.org/Search/Reading',
+                        method: 'GET',
+                        headers: { 'Cookie': cookieH, 'User-Agent': UA }
+                    });
+                    const hasToken = checkRes.data && checkRes.data.includes('__RequestVerificationToken');
+                    if (!hasToken) {
+                        console.log('[ORCH] BnF session expired server-side, refreshing...');
+                        const refreshed = await bnfConnector.refresh(state);
+                        if (refreshed) Object.assign(state, refreshed);
+                    }
+                } catch (checkErr) {
+                    console.warn('[ORCH] BnF session check failed, refreshing:', checkErr.message);
+                    try {
+                        const refreshed = await bnfConnector.refresh(state);
+                        if (refreshed) Object.assign(state, refreshed);
+                    } catch (refreshErr) {
+                        console.warn('[ORCH] BnF session refresh failed:', refreshErr.message);
+                    }
+                }
+            }
         }
 
         let lastError = null;
