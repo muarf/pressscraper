@@ -7,7 +7,7 @@
             proxyHost: 'www-mediapart-fr.bnf.idm.oclc.org',
             name: 'Mediapart',
             contentSelector: '.paywall-restricted-content, .news__body__center__article, .content-article, .article__content, [data-module="article-body"], .article-body',
-            paywallSelector: '#paywall, [class*="paywall"]:not(.paywall-restricted-content), .register-wall, .subscribe'
+            paywallSelector: '#paywall, [class*="paywall"]:not(.paywall-restricted-content), .paywall, .register-wall, .subscribe'
         },
         {
             domains: ['arretsurimages.net', 'www.arretsurimages.net'],
