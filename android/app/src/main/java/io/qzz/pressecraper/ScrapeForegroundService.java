@@ -55,13 +55,7 @@ public class ScrapeForegroundService extends Service {
     private Handler mainHandler;
     private Runnable timeoutRunnable;
     private boolean completed = false;
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        mainHandler = new Handler(Looper.getMainLooper());
-        createNotificationChannel();
-    }
+    private static volatile boolean isRunning = false;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -71,6 +65,12 @@ public class ScrapeForegroundService extends Service {
             return START_NOT_STICKY;
         }
 
+        if (isRunning) {
+            Log.w(TAG, "Already running, ignoring duplicate start: " + url);
+            return START_NOT_STICKY;
+        }
+        isRunning = true;
+
         Log.i(TAG, "Starting background scrape for: " + url);
 
         startForeground(NOTIF_ID_PROGRESS, buildProgressNotification("Préparation..."));
@@ -79,6 +79,7 @@ public class ScrapeForegroundService extends Service {
         timeoutRunnable = () -> {
             if (!completed) {
                 Log.w(TAG, "Scrape timeout reached");
+                isRunning = false;
                 showFinalNotification("❌ Temps écoulé", "Le téléchargement a pris trop de temps", null);
                 cleanup();
                 stopSelf();
@@ -724,6 +725,7 @@ public class ScrapeForegroundService extends Service {
     void onScrapeComplete(String articleId, String title) {
         if (completed) return;
         completed = true;
+        isRunning = false;
         mainHandler.removeCallbacks(timeoutRunnable);
 
         // Let JS finish its post-scrape work (IndexedDB save, render, etc.)
@@ -838,6 +840,7 @@ public class ScrapeForegroundService extends Service {
 
     @Override
     public void onDestroy() {
+        isRunning = false;
         cleanup();
         mainHandler.removeCallbacks(timeoutRunnable);
         super.onDestroy();

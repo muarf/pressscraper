@@ -51,14 +51,8 @@ public class MainActivity extends BridgeActivity {
                 String sharedTitle = intent.getStringExtra(Intent.EXTRA_SUBJECT);
                 if (sharedText != null) {
                     Log.i(TAG, "SEND text: " + sharedText);
-                    // Start background service for headless scraping (no notifyJs — stays in background)
-                    try {
-                        Intent serviceIntent = new Intent(this, ScrapeForegroundService.class);
-                        serviceIntent.putExtra("url", sharedText);
-                        startForegroundService(serviceIntent);
-                    } catch (Exception e) {
-                        Log.e(TAG, "Failed to start ScrapeForegroundService: " + e.getMessage());
-                    }
+                    // L'IntentForwarderPlugin notifie déjà le JS via intentReceived → handleSharedContent
+                    // Le service n'est démarré que pour ACTION_VIEW (liens directs) et PROCESS_TEXT
                 }
             }
         } else if (Intent.ACTION_PROCESS_TEXT.equals(action)) {
