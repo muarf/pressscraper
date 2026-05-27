@@ -47,10 +47,19 @@
             const releases = await res.json();
             if (!Array.isArray(releases) || releases.length === 0) return;
 
-            // Find the latest prerelease with an APK asset
-            const beta = releases.find(r =>
-                r.prerelease && r.assets && r.assets.some(a => a.name && a.name.endsWith('.apk'))
-            );
+            // Find the latest prerelease with an APK asset (sorted by semver tag, not API order)
+            const betas = releases
+                .filter(r => r.prerelease && r.assets && r.assets.some(a => a.name && a.name.endsWith('.apk')))
+                .sort((a, b) => {
+                    const aParts = (a.tag_name || '').replace(/^v/, '').split(/[.-]/).map(Number);
+                    const bParts = (b.tag_name || '').replace(/^v/, '').split(/[.-]/).map(Number);
+                    for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+                        const av = aParts[i] || 0, bv = bParts[i] || 0;
+                        if (av !== bv) return bv - av; // descending (newest first)
+                    }
+                    return 0;
+                });
+            const beta = betas[0];
             if (!beta) return;
 
             const current = await getCurrentVersion();
