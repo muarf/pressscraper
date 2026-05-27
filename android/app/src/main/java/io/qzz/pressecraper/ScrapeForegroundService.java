@@ -52,7 +52,7 @@ public class ScrapeForegroundService extends Service {
     private static final long TIMEOUT_MS = 130_000;
 
     private WebView webView;
-    private Handler mainHandler;
+    private Handler mainHandler = new Handler(Looper.getMainLooper());
     private Runnable timeoutRunnable;
     private boolean completed = false;
     private static volatile boolean isRunning = false;

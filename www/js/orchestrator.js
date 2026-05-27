@@ -17,7 +17,14 @@
 
     function processTitleToQuery(title) {
         if (!title) return null;
-        let cleanTitle = title.split(/ - | \| | — | · /)[0];
+        let cleanTitle = title;
+        const parts = title.split(/ - | \| | — | · /);
+        if (parts.length > 1) {
+            const sectionPrefixes = ['en direct', 'vidéo', 'video', 'info', 'info ', 'replay', 'exclusif', 'live', 'en images', 'podcast', 'diaporama'];
+            const firstWord = parts[0].toLowerCase().trim();
+            const isPrefix = sectionPrefixes.some(p => firstWord === p || firstWord.startsWith(p));
+            cleanTitle = isPrefix ? parts.slice(1).join(' - ') : parts[0];
+        }
         cleanTitle = cleanTitle.replace(/[''""'‘`]/g, ' ');
         cleanTitle = cleanTitle.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()…?–—«»]/g, ' ');
         const words = cleanTitle.toLowerCase().split(/\s+/).filter(Boolean);
@@ -229,10 +236,10 @@
             }
         }
 
-        // Étape 3 : Réessai avec 5 mots si toujours aucun résultat
+        // Étape 3 : Réessai avec 5 premiers mots
         if ((!items || items.length === 0) && words.length > 5) {
             const query5 = words.slice(0, 5).join(' ');
-            console.log('[ORCH] Retry with 5-word query:', query5);
+            console.log('[ORCH] Retry with first 5 words:', query5);
             try {
                 items = await searchFn(query5);
             } catch (e) {
@@ -240,7 +247,18 @@
             }
         }
 
-        // Étape 4 : Réessai sans élisions
+        // Étape 4 : Réessai avec les 5 derniers mots
+        if ((!items || items.length === 0) && words.length > 5) {
+            const queryLast5 = words.slice(-5).join(' ');
+            console.log('[ORCH] Retry with last 5 words:', queryLast5);
+            try {
+                items = await searchFn(queryLast5);
+            } catch (e) {
+                console.warn('[ORCH] Search failed with last-5 query:', e.message);
+            }
+        }
+
+        // Étape 5 : Réessai sans élisions
         if (!items || items.length === 0) {
             const filteredWords = words.filter(w => !/^l[aeiouyéàèùâêîôûëïü]/i.test(w));
             if (filteredWords.length > 0 && filteredWords.length < words.length) {

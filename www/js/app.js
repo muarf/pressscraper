@@ -143,9 +143,13 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
             providerOrder: state.providerOrder || ['bpc', 'pressreader', 'cafeyn', 'bnf'],
             providerEnabled: state.providerEnabled || {},
+            bnfUsername: state.bnfUsername || '',
+            bnfPassword: state.bnfPassword || '',
             bnfCookies: state.bnfCookies,
             bnfCookiesHeader: state.bnfCookiesHeader,
             bnfCookiesExpiry: state.bnfCookiesExpiry,
+            cafeynUsername: state.cafeynUsername || '',
+            cafeynPassword: state.cafeynPassword || '',
             cafeynJwt: state.cafeynJwt || '',
             cafeynCookies: state.cafeynCookies,
             cafeynCookiesHeader: state.cafeynCookiesHeader,

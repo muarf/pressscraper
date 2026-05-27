@@ -125,7 +125,7 @@
             } else if (siteConfig.name === 'Mediapart') {
                 onProgress('BnF Proxy', 'Activation de la licence Mediapart...', 20);
                 try {
-                    await BnfLogin.httpRequest({
+                    const licRes = await BnfLogin.httpRequest({
                         url: 'https://bnf.idm.oclc.org/login?url=http://www.mediapart.fr/licence',
                         method: 'GET',
                         headers: {
@@ -134,12 +134,15 @@
                             'Referer': 'https://www.google.com/'
                         }
                     });
+                    console.log('[BnF Proxy] Licence activation status:', licRes?.status, 'data.length:', (licRes?.data || '').length);
                 } catch (err) {
                     console.warn('[BnF Proxy] Échec activation licence Mediapart:', err);
                 }
             }
 
             onProgress('BnF Proxy', 'Téléchargement de la page...', 50);
+            console.log('[BnF Proxy] DEBUG proxyUrl:', proxyUrl);
+            console.log('[BnF Proxy] DEBUG cookieHeader length:', (cookieHeader || '').length, 'first 200:', (cookieHeader || '').substring(0, 200));
             const pageRes = await BnfLogin.httpRequest({
                 url: proxyUrl,
                 method: 'GET',
@@ -152,6 +155,11 @@
             if (!pageRes || pageRes.error) {
                 throw new Error(`[BnF Proxy] Erreur réseau : ${pageRes?.error || 'inconnue'}`);
             }
+            console.log('[BnF Proxy] DEBUG http status:', pageRes.status);
+            console.log('[BnF Proxy] DEBUG html length:', (pageRes.data || '').length);
+            console.log('[BnF Proxy] DEBUG html start:', (pageRes.data || '').substring(0, 1000));
+            console.log('[BnF Proxy] DEBUG html end:', (pageRes.data || '').slice(-300));
+
             if (pageRes.status >= 400) {
                 throw new Error(`[BnF Proxy] HTTP ${pageRes.status} pour ${proxyUrl}`);
             }
@@ -196,7 +204,11 @@
 
             const paywallEl = doc.querySelector(siteConfig.paywallSelector);
             const textLength = contentEl ? contentEl.textContent.trim().length : 0;
+            console.log('[BnF Proxy] DEBUG paywallEl:', !!paywallEl, 'textLength:', textLength, 'contentEl:', !!contentEl);
             if (paywallEl && textLength < 800) {
+                console.log('[BnF Proxy] DEBUG paywall HTML:', paywallEl.outerHTML.substring(0, 500));
+                console.log('[BnF Proxy] DEBUG page title:', doc.title);
+                console.log('[BnF Proxy] DEBUG meta robots:', doc.querySelector('meta[name="robots"]')?.getAttribute('content'));
                 throw new Error(`Paywall encore actif sur ${siteConfig.name}. Vérifiez votre session BnF.`);
             }
 
