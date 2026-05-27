@@ -748,6 +748,8 @@
         let sessionRetry = false;
         const startTime = Date.now();
         const MAX_SCRAPE_DURATION_MS = 120_000;
+        if (window._scrapingInProgress) { console.warn('[SCRAPE] Déjà en cours, ignoré'); return; }
+        window._scrapingInProgress = true;
         try {
             while (true) {
                 if (Date.now() - startTime > MAX_SCRAPE_DURATION_MS) {
@@ -885,6 +887,8 @@
             }
             
             resetScrapeBtn();
+        } finally {
+            window._scrapingInProgress = false;
         }
     };
 
