@@ -47,6 +47,7 @@ TEST_URLS = {
     "pressreader": "https://www.lefigaro.fr/meteo/en-direct-canicule-la-france-suffoque-sous-le-dome-de-chaleur-13-departements-en-vigilance-orange-et-la-vitesse-abaissee-en-ile-de-france-20260527",
     "cafeyn": "https://www.lefigaro.fr/meteo/en-direct-canicule-la-france-suffoque-sous-le-dome-de-chaleur-13-departements-en-vigilance-orange-et-la-vitesse-abaissee-en-ile-de-france-20260527",
     "bnf-proxy": "https://www.arretsurimages.net/articles/affaire-pellan-le-rapport-qui-accable",
+    "mediapart": "https://www.mediapart.fr/journal/culture-et-idees/250526/deborah-de-robertis-dans-le-texte",
 }
 
 TIMEOUT_SCRAPE = 140  # seconds max to wait for a single scrape (JS timeout is 120s)
@@ -337,6 +338,7 @@ PROVIDER_ID_MAP = {
     "pressreader": "pressreader",
     "cafeyn": "cafeyn",
     "bnf-proxy": "bnf",  # bnf-proxy is auto-injected when BnF enabled + URL is mediapart/ASI
+    "mediapart": "bnf",  # same: uses BnF auth + bnf-proxy service
 }
 
 
@@ -472,14 +474,14 @@ def test_single_provider(ctx, provider_id, url=None):
         elif ctx.get("cafeyn_user"):
             overrides["cafeynUsername"] = ctx["cafeyn_user"]
             overrides["cafeynPassword"] = ctx["cafeyn_pass"]
-    if provider_id in ("bnf", "bnf-proxy") and ctx.get("bnf_user"):
+    if provider_id in ("bnf", "bnf-proxy", "mediapart") and ctx.get("bnf_user"):
         overrides["bnfUsername"] = ctx["bnf_user"]
         overrides["bnfPassword"] = ctx["bnf_pass"]
 
     inject_state(cdp, overrides)
 
     # Inject credentials via native plugin if available
-    if provider_id in ("bnf", "bnf-proxy") and ctx.get("bnf_user"):
+    if provider_id in ("bnf", "bnf-proxy", "mediapart") and ctx.get("bnf_user"):
         cdp.evaluate(f"""
             window.Capacitor.Plugins.BnfLogin.saveCredentials({{
                 username: {json.dumps(ctx['bnf_user'])},
@@ -775,9 +777,27 @@ def intent_suite(ctx):
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
+def download_latest_beta_apk():
+    """Download the latest beta APK from GitHub releases."""
+    import urllib.request
+    api = "https://api.github.com/repos/muarf/pressscraper/releases"
+    resp = urllib.request.urlopen(api, timeout=30)
+    releases = json.loads(resp.read())
+    for rel in releases:
+        if rel.get("prerelease") and rel.get("assets"):
+            for asset in rel["assets"]:
+                if asset["name"].endswith(".apk"):
+                    url = asset["browser_download_url"]
+                    print(f"    Downloading {asset['name']}...", end=" ", flush=True)
+                    urllib.request.urlretrieve(url, f"/tmp/{asset['name']}")
+                    print("OK")
+                    return f"/tmp/{asset['name']}"
+    raise AssertionError("No beta APK found in GitHub releases")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Archive Presse test runner")
-    parser.add_argument("--apk", help="Path to APK to install")
+    parser.add_argument("--apk", help="Path to APK to install (default: latest GitHub beta)")
     parser.add_argument("--provider", choices=list(TEST_URLS.keys()),
                         action="append", dest="providers",
                         help="Specific provider(s) to test (repeatable)")
@@ -786,11 +806,11 @@ def main():
     parser.add_argument("--headless", action="store_true", help="Test headless service")
     parser.add_argument("--intents", action="store_true", help="Test intent handling")
     parser.add_argument("--cross-cutting", action="store_true", help="Cross-cutting tests")
-    parser.add_argument("--bnf-user", help="BnF username")
-    parser.add_argument("--bnf-pass", help="BnF password")
-    parser.add_argument("--cafeyn-user", help="Cafeyn username")
-    parser.add_argument("--cafeyn-pass", help="Cafeyn password")
-    parser.add_argument("--cafeyn-jwt", help="Cafeyn JWT token (skip GPSEA login)")
+    parser.add_argument("--bnf-user", default=os.environ.get("BNF_USER"), help="BnF username (default: $BNF_USER)")
+    parser.add_argument("--bnf-pass", default=os.environ.get("BNF_PASS"), help="BnF password (default: $BNF_PASS)")
+    parser.add_argument("--cafeyn-user", default=os.environ.get("CAFEYN_USER"), help="Cafeyn username (default: $CAFEYN_USER)")
+    parser.add_argument("--cafeyn-pass", default=os.environ.get("CAFEYN_PASS"), help="Cafeyn password (default: $CAFEYN_PASS)")
+    parser.add_argument("--cafeyn-jwt", default=os.environ.get("CAFEYN_JWT"), help="Cafeyn JWT token (default: $CAFEYN_JWT)")
     parser.add_argument("--device", help="ADB device serial (default: first found)")
     args = parser.parse_args()
 
@@ -817,12 +837,12 @@ def main():
         print(f"  ❌ {e}")
         sys.exit(1)
 
-    # Install APK if provided
-    if args.apk:
-        force_stop()
-        clear_data()
-        install_apk(args.apk)
-        time.sleep(2)
+    # Install APK (auto-download from GitHub if not specified)
+    apk_path = args.apk or download_latest_beta_apk()
+    force_stop()
+    clear_data()
+    install_apk(apk_path)
+    time.sleep(2)
 
     # Run selected tests
     if args.smoke:
