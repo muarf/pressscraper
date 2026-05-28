@@ -13,6 +13,18 @@
     // UA de secours utilisé si le plugin natif n'est pas disponible (tests navigateur)
     const UA_FALLBACK = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 
+    // CSS pour le rendu PDF et la visionneuse
+    global.PRINT_CSS = `
+        @page { margin: 15mm 20mm; size: A4; }
+        @media print {
+            body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000; background: #fff; padding: 0; margin: 0; }
+            h1 { font-size: 18pt; font-weight: bold; margin-bottom: 12pt; line-height: 1.3; border-bottom: 1px solid #ccc; padding-bottom: 8pt; page-break-after: avoid; }
+            p, li, blockquote, figure { page-break-inside: avoid; orphans: 3; widows: 3; }
+            img { max-width: 100%; page-break-inside: avoid; }
+            a::after { content: ""; }
+        }
+    `;
+
     // ===== BnF PROXY CONFIG =====
     // Correspondances : domaine original → sous-domaine EZProxy BnF
     const BNF_PROXY_SITES = [
@@ -21,18 +33,16 @@
             domains: ['mediapart.fr', 'www.mediapart.fr'],
             proxyHost: 'www-mediapart-fr.bnf.idm.oclc.org',
             name: 'Mediapart',
-            // Sélecteur du bloc de contenu de l'article
             contentSelector: '.paywall-restricted-content, .news__body__center__article, .content-article, .article__content, [data-module="article-body"], .article-body',
-            // Sélecteur du paywall résiduel éventuel
-            paywallSelector: '.paywall, #paywall, [class*="paywall"], .register-wall, .subscribe'
+            paywallSelector: '#paywall, .paywall, .register-wall, .subscribe'
         },
         {
             // Arrêt sur Images
             domains: ['arretsurimages.net', 'www.arretsurimages.net'],
             proxyHost: 'www-arretsurimages-net.bnf.idm.oclc.org',
             name: 'Arrêt sur Images',
-            contentSelector: '.article-content, .entry-content, .post-content, article .content, [class*="article-body"]',
-            paywallSelector: '.paywall, #paywall, [class*="paywall"], .subscribe-wall'
+            contentSelector: '.page-content, .article-content, .entry-content, .post-content, article .content, [class*="article-body"]',
+            paywallSelector: '.paywall-block.paywall-callToAction, .paywall, #paywall, .subscribe-wall'
         }
     ];
 

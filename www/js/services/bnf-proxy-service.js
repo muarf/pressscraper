@@ -7,14 +7,14 @@
             proxyHost: 'www-mediapart-fr.bnf.idm.oclc.org',
             name: 'Mediapart',
             contentSelector: '.paywall-restricted-content, .news__body__center__article, .content-article, .article__content, [data-module="article-body"], .article-body',
-            paywallSelector: '.paywall, #paywall, [class*="paywall"]:not(.paywall-restricted-content), .register-wall, .subscribe'
+            paywallSelector: '#paywall, .paywall, .register-wall, .subscribe'
         },
         {
             domains: ['arretsurimages.net', 'www.arretsurimages.net'],
             proxyHost: 'www-arretsurimages-net.bnf.idm.oclc.org',
             name: 'Arrêt sur Images',
-            contentSelector: '.article-content, .entry-content, .post-content, article .content, [class*="article-body"]',
-            paywallSelector: '.paywall, #paywall, [class*="paywall"], .subscribe-wall'
+            contentSelector: '.page-content, .article-content, .entry-content, .post-content, article .content, [class*="article-body"]',
+            paywallSelector: '.paywall-block.paywall-callToAction, .paywall, #paywall, .subscribe-wall'
         }
     ];
 
