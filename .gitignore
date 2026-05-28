@@ -15,3 +15,5 @@ Thumbs.db
 *.iml
 .idea/
 cafeyn_temp/
+.env
+test.txt

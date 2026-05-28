@@ -45,9 +45,9 @@ TEST_URLS = {
     "bpc": "https://www.leparisien.fr/meteo/on-na-jamais-battu-autant-de-records-en-mai-la-carte-des-villes-ou-le-thermometre-a-atteint-des-sommets-27-05-2026-7KB7BQHMPVCHZDZW2PLJ7B2QP4.php",
     "europresse": "https://www.lemonde.fr/international/article/2026/05/27/derriere-la-guerre-de-vladimir-poutine-le-role-croissant-du-fsb-l-agence-de-renseignement-russe_6694149_3210.html",
     "pressreader": "https://www.lefigaro.fr/meteo/en-direct-canicule-la-france-suffoque-sous-le-dome-de-chaleur-13-departements-en-vigilance-orange-et-la-vitesse-abaissee-en-ile-de-france-20260527",
-    "cafeyn": "https://www.lefigaro.fr/meteo/en-direct-canicule-la-france-suffoque-sous-le-dome-de-chaleur-13-departements-en-vigilance-orange-et-la-vitesse-abaissee-en-ile-de-france-20260527",
+    "cafeyn": "https://www.lefigaro.fr/impots/qui-sont-ces-gros-patrimoines-qui-ne-paient-pas-d-impot-sur-le-revenu-20260527",
     "bnf-proxy": "https://www.arretsurimages.net/articles/affaire-pellan-le-rapport-qui-accable",
-    "mediapart": "https://www.mediapart.fr/journal/culture-et-idees/250526/deborah-de-robertis-dans-le-texte",
+    "mediapart": "https://www.mediapart.fr/journal/france/270526/le-senat-vote-le-projet-de-loi-ripost-defouloir-securitaire-de-la-majorite",
 }
 
 TIMEOUT_SCRAPE = 140  # seconds max to wait for a single scrape (JS timeout is 120s)
@@ -838,7 +838,7 @@ def main():
         sys.exit(1)
 
     # Install APK (auto-download from GitHub if not specified)
-    apk_path = args.apk or download_latest_beta_apk()
+    apk_path = args.apk or "android/app/build/outputs/apk/debug/app-debug.apk"
     force_stop()
     clear_data()
     install_apk(apk_path)

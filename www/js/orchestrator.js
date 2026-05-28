@@ -566,6 +566,21 @@
                             (q) => window.CafeynService.search(q).then(r => r.articles?.collection || []),
                             query
                         );
+                        if ((!searchRes || searchRes.length === 0) && isUrl) {
+                            try {
+                                const pubMatch = titleOrUrl.match(/https?:\/\/(?:www\.)?([^.]+)\./);
+                                if (pubMatch) {
+                                    const pubQuery = query + ' ' + pubMatch[1];
+                                    console.log('[Cafeyn] Retry with publication:', pubQuery);
+                                    searchRes = await retrySearch(
+                                        (q) => window.CafeynService.search(q).then(r => r.articles?.collection || []),
+                                        pubQuery
+                                    );
+                                }
+                            } catch (e) {
+                                console.warn('[Cafeyn] Publication search retry failed:', e.message);
+                            }
+                        }
 
                         let bestMatch = null;
                         let maxSim = 0;
