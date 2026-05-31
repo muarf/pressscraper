@@ -325,10 +325,17 @@
             if (bnfProxyPair && bnfProxyPair.service?.supportsUrl?.(titleOrUrl)) {
                 const alreadyIn = pairs.some(p => p.id === 'bnf-proxy');
                 if (!alreadyIn) {
-                    // Insert after the last bnf-related pair, or at end
-                    const bnfIdx = pairs.findIndex(p => p.id === 'bnf');
-                    pairs.splice(bnfIdx >= 0 ? bnfIdx + 1 : pairs.length, 0, bnfProxyPair);
-                    console.log('[ORCH] bnf-proxy injecté pour', titleOrUrl);
+                    const hasCredentials = !!(state.bnfCookiesHeader || state.bnfUsername);
+                    if (hasCredentials) {
+                        // BnF Proxy en premier si credentials disponibles
+                        pairs.unshift(bnfProxyPair);
+                        console.log('[ORCH] bnf-proxy prioritaire pour', titleOrUrl);
+                    } else {
+                        // Sinon après bnf (fallback)
+                        const bnfIdx = pairs.findIndex(p => p.id === 'bnf');
+                        pairs.splice(bnfIdx >= 0 ? bnfIdx + 1 : pairs.length, 0, bnfProxyPair);
+                        console.log('[ORCH] bnf-proxy injecté après bnf pour', titleOrUrl);
+                    }
                 }
             }
         }

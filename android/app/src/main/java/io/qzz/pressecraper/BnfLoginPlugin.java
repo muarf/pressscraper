@@ -49,6 +49,7 @@ public class BnfLoginPlugin extends Plugin {
     private static final String BNF_AUTH_URL = "https://bnf.idm.oclc.org/login?url=https://nouveau.europresse.com/access/ip/default.aspx?un=D000067U_1";
     private static final String EUROPRESSE_DOMAIN = "nouveau-europresse-com.bnf.idm.oclc.org";
 
+    private int currentUrlIndex = 0;
     private WebView webView;
     private PluginCall pendingCall;
     private Handler timeoutHandler;
@@ -142,6 +143,7 @@ public class BnfLoginPlugin extends Plugin {
             webView = null;
         }
 
+        currentUrlIndex = 0;
         webView = new WebView(getContext());
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
@@ -161,64 +163,114 @@ public class BnfLoginPlugin extends Plugin {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                Log.d(TAG, "Page finished: " + url);
+                Log.d(TAG, "Page finished (index " + currentUrlIndex + "): " + url);
 
-                // Check if redirected to Europresse (login succeeded)
-                if (url.contains(EUROPRESSE_DOMAIN) && !url.contains("login")) {
-                    handleLoginSuccess(url);
-                    return;
-                }
-
-                // Check for login errors
-                view.evaluateJavascript(
-                    "(function() {" +
-                    "  var errors = document.querySelectorAll('.erreur, .error, [class*=\"error\"], .alert-danger, #error');" +
-                    "  for (var i = 0; i < errors.length; i++) {" +
-                    "    var t = errors[i].textContent.trim();" +
-                    "    if (t && errors[i].offsetParent !== null) return t;" +
-                    "  }" +
-                    "  return null;" +
-                    "})()",
-                    errorResult -> {
-                        if (errorResult != null && !errorResult.equals("null") && !errorResult.isEmpty()) {
-                            String error = errorResult.replace("\"", "").trim();
-                            Log.w(TAG, "Login error: " + error);
-                            handleLoginFailure(error);
-                            return;
-                        }
+                // If index 0 (Europresse login)
+                if (currentUrlIndex == 0) {
+                    if (url.contains(EUROPRESSE_DOMAIN) && !url.contains("login")) {
+                        Log.d(TAG, "Europresse login success, loading Mediapart licence...");
+                        currentUrlIndex = 1;
+                        view.loadUrl("https://bnf.idm.oclc.org/login?url=https://www.mediapart.fr/licence");
+                        return;
                     }
-                );
 
-                // If on login page, auto-fill and submit
-                if (url.contains("bnf.idm.oclc.org") || url.contains("login") || url.contains("idm.oclc.org")) {
-                    String jsCode =
+                    // Check for login errors only during primary login
+                    view.evaluateJavascript(
                         "(function() {" +
-                        "  var u = document.querySelector(\"input[type='text'], input[id*='user'], input[name*='user'], input[name='username'], input[name='j_username']\");" +
-                        "  var p = document.querySelector(\"input[type='password'], input[name='j_password']\");" +
-                        "  if (u && p) {" +
-                        "    u.value = '" + safeUsername + "';" +
-                        "    u.dispatchEvent(new Event('input', {bubbles: true}));" +
-                        "    u.dispatchEvent(new Event('change', {bubbles: true}));" +
-                        "    p.value = '" + safePassword + "';" +
-                        "    p.dispatchEvent(new Event('input', {bubbles: true}));" +
-                        "    p.dispatchEvent(new Event('change', {bubbles: true}));" +
-                        "    var btn = document.querySelector(\"input[type='submit'], button[type='submit'], button.submit, .btn-primary\");" +
-                        "    if (btn) { btn.click(); return 'submitted'; }" +
-                        "    var form = document.querySelector('form');" +
-                        "    if (form) { form.submit(); return 'submitted'; }" +
-                        "    return 'no_submit';" +
+                        "  var errors = document.querySelectorAll('.erreur, .error, [class*=\"error\"], .alert-danger, #error');" +
+                        "  for (var i = 0; i < errors.length; i++) {" +
+                        "    var t = errors[i].textContent.trim();" +
+                        "    if (t && errors[i].offsetParent !== null) return t;" +
                         "  }" +
-                        "  return 'no_fields';" +
-                        "})()";
+                        "  return null;" +
+                        "})()",
+                        errorResult -> {
+                            if (errorResult != null && !errorResult.equals("null") && !errorResult.isEmpty()) {
+                                String error = errorResult.replace("\"", "").trim();
+                                Log.w(TAG, "Login error: " + error);
+                                handleLoginFailure(error);
+                                return;
+                            }
+                        }
+                    );
 
-                    view.evaluateJavascript(jsCode, fillResult -> {
-                        Log.d(TAG, "Form fill: " + fillResult);
-                    });
+                    // If on login page, auto-fill and submit
+                    if (url.contains("bnf.idm.oclc.org") || url.contains("login") || url.contains("idm.oclc.org")) {
+                        String jsCode =
+                            "(function() {" +
+                            "  var u = document.querySelector(\"input[type='text'], input[id*='user'], input[name*='user'], input[name='username'], input[name='j_username']\");" +
+                            "  var p = document.querySelector(\"input[type='password'], input[name='j_password']\");" +
+                            "  if (u && p) {" +
+                            "    u.value = '" + safeUsername + "';" +
+                            "    u.dispatchEvent(new Event('input', {bubbles: true}));" +
+                            "    u.dispatchEvent(new Event('change', {bubbles: true}));" +
+                            "    p.value = '" + safePassword + "';" +
+                            "    p.dispatchEvent(new Event('input', {bubbles: true}));" +
+                            "    p.dispatchEvent(new Event('change', {bubbles: true}));" +
+                            "    var btn = document.querySelector(\"input[type='submit'], button[type='submit'], button.submit, .btn-primary\");" +
+                            "    if (btn) { btn.click(); return 'submitted'; }" +
+                            "    var form = document.querySelector('form');" +
+                            "    if (form) { form.submit(); return 'submitted'; }" +
+                            "    return 'no_submit';" +
+                            "  }" +
+                            "  return 'no_fields';" +
+                            "})()";
+
+                        view.evaluateJavascript(jsCode, fillResult -> {
+                            Log.d(TAG, "Form fill: " + fillResult);
+                        });
+                    }
+                } else if (currentUrlIndex == 1) {
+                    if (url.contains("mediapart") && !url.contains("login")) {
+                        Log.d(TAG, "Mediapart licence loaded successfully, loading ASI autologin...");
+                        currentUrlIndex = 2;
+                        view.loadUrl("https://www-arretsurimages-net.bnf.idm.oclc.org/autologin.php");
+                        return;
+                    }
+                    if (url.contains("login") || url.contains("error")) {
+                        Log.w(TAG, "Mediapart licence failed (login/error detected), skipping to ASI...");
+                        currentUrlIndex = 2;
+                        view.loadUrl("https://www-arretsurimages-net.bnf.idm.oclc.org/autologin.php");
+                        return;
+                    }
+                } else if (currentUrlIndex == 2) {
+                    if (url.contains("arretsurimages") && !url.contains("login")) {
+                        Log.d(TAG, "ASI autologin loaded successfully, completing login...");
+                        handleLoginSuccess(url);
+                        return;
+                    }
+                    if (url.contains("login") || url.contains("error")) {
+                        Log.w(TAG, "ASI autologin failed (login/error detected), completing login anyway...");
+                        handleLoginSuccess(url);
+                        return;
+                    }
                 }
             }
         });
 
         webView.loadUrl(BNF_AUTH_URL);
+    }
+
+    private void parseCookiesToMap(String cookiesStr, String domain, Map<String, JSONObject> cookieMap) {
+        if (cookiesStr == null || cookiesStr.isEmpty()) return;
+        String[] pairs = cookiesStr.split(";");
+        for (String pair : pairs) {
+            String[] parts = pair.trim().split("=", 2);
+            if (parts.length == 2) {
+                String name = parts[0].trim();
+                String value = parts[1].trim();
+                try {
+                    JSONObject cookieObj = new JSONObject();
+                    cookieObj.put("name", name);
+                    cookieObj.put("value", value);
+                    cookieObj.put("domain", domain);
+                    cookieObj.put("path", "/");
+                    cookieMap.put(name, cookieObj);
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error building cookie JSON", e);
+                }
+            }
+        }
     }
 
     private void handleLoginSuccess(String url) {
@@ -227,29 +279,37 @@ public class BnfLoginPlugin extends Plugin {
         }
 
         CookieManager cookieManager = CookieManager.getInstance();
-        String cookiesStr = cookieManager.getCookie("https://" + EUROPRESSE_DOMAIN);
-        Log.d(TAG, "Cookies: " + (cookiesStr != null ? cookiesStr.substring(0, Math.min(200, cookiesStr.length())) + "..." : "null"));
+
+        // Merge cookies from Europresse, Mediapart and ASI to ensure all licences/sessions are passed to Javascript
+        Map<String, JSONObject> cookieMap = new HashMap<>();
+        parseCookiesToMap(cookieManager.getCookie("https://nouveau-europresse-com.bnf.idm.oclc.org"), EUROPRESSE_DOMAIN, cookieMap);
+        parseCookiesToMap(cookieManager.getCookie("https://www-mediapart-fr.bnf.idm.oclc.org"), "www-mediapart-fr.bnf.idm.oclc.org", cookieMap);
+        parseCookiesToMap(cookieManager.getCookie("https://www-arretsurimages-net.bnf.idm.oclc.org"), "www-arretsurimages-net.bnf.idm.oclc.org", cookieMap);
+
+        Log.d(TAG, "Merged cookies count: " + cookieMap.size());
 
         JSObject result = new JSObject();
 
-        if (cookiesStr != null && !cookiesStr.isEmpty()) {
+        if (!cookieMap.isEmpty()) {
             try {
                 JSONArray cookieArray = new JSONArray();
-                String[] pairs = cookiesStr.split(";");
-                for (String pair : pairs) {
-                    String[] parts = pair.trim().split("=", 2);
-                    if (parts.length == 2) {
-                        JSONObject cookie = new JSONObject();
-                        cookie.put("name", parts[0].trim());
-                        cookie.put("value", parts[1].trim());
-                        cookie.put("domain", EUROPRESSE_DOMAIN);
-                        cookie.put("path", "/");
-                        cookieArray.put(cookie);
+                StringBuilder sb = new StringBuilder();
+
+                for (Map.Entry<String, JSONObject> entry : cookieMap.entrySet()) {
+                    String name = entry.getKey();
+                    JSONObject cookieObj = entry.getValue();
+                    cookieArray.put(cookieObj);
+
+                    if (sb.length() > 0) {
+                        sb.append("; ");
                     }
+                    sb.append(name).append("=").append(cookieObj.getString("value"));
                 }
+
+                String mergedCookiesStr = sb.toString();
                 result.put("success", true);
                 result.put("cookies", cookieArray);
-                result.put("cookieHeader", cookiesStr);
+                result.put("cookieHeader", mergedCookiesStr);
             } catch (JSONException e) {
                 result.put("success", false);
                 result.put("error", "Cookie parsing error: " + e.getMessage());

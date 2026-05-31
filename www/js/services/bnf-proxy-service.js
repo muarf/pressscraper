@@ -65,7 +65,7 @@
                 onProgress('BnF Proxy', 'Authentification Arrêt sur Images...', 20);
                 try {
                     const autologinRes = await BnfLogin.httpRequest({
-                        url: 'https://bnf.idm.oclc.org/login?url=http://www.arretsurimages.net/autologin.php',
+                        url: 'https://www-arretsurimages-net.bnf.idm.oclc.org/autologin.php',
                         method: 'GET',
                         headers: {
                             'User-Agent': UA,
@@ -126,7 +126,7 @@
                 onProgress('BnF Proxy', 'Activation de la licence Mediapart...', 20);
                 try {
                     const licRes = await BnfLogin.httpRequest({
-                        url: 'https://bnf.idm.oclc.org/login?url=http://www.mediapart.fr/licence',
+                        url: 'https://www-mediapart-fr.bnf.idm.oclc.org/licence',
                         method: 'GET',
                         headers: {
                             'User-Agent': UA,
