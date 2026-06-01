@@ -7,14 +7,14 @@
             proxyHost: 'www-mediapart-fr.bnf.idm.oclc.org',
             name: 'Mediapart',
             contentSelector: '.paywall-restricted-content, .news__body__center__article, .content-article, .article__content, [data-module="article-body"], .article-body',
-            paywallSelector: '.paywall, #paywall, [class*="paywall"], .register-wall, .subscribe'
+            paywallSelector: '#paywall, .paywall, .register-wall, .subscribe'
         },
         {
             domains: ['arretsurimages.net', 'www.arretsurimages.net'],
             proxyHost: 'www-arretsurimages-net.bnf.idm.oclc.org',
             name: 'Arrêt sur Images',
-            contentSelector: '.article-content, .entry-content, .post-content, article .content, [class*="article-body"]',
-            paywallSelector: '.paywall, #paywall, [class*="paywall"], .subscribe-wall'
+            contentSelector: '.page-content, .article-content, .entry-content, .post-content, article .content, [class*="article-body"]',
+            paywallSelector: '.paywall-block.paywall-callToAction, .paywall, #paywall, .subscribe-wall'
         }
     ];
 
@@ -65,7 +65,7 @@
                 onProgress('BnF Proxy', 'Authentification Arrêt sur Images...', 20);
                 try {
                     const autologinRes = await BnfLogin.httpRequest({
-                        url: 'https://bnf.idm.oclc.org/login?url=http://www.arretsurimages.net/autologin.php',
+                        url: 'https://www-arretsurimages-net.bnf.idm.oclc.org/autologin.php',
                         method: 'GET',
                         headers: {
                             'User-Agent': UA,
@@ -125,8 +125,8 @@
             } else if (siteConfig.name === 'Mediapart') {
                 onProgress('BnF Proxy', 'Activation de la licence Mediapart...', 20);
                 try {
-                    await BnfLogin.httpRequest({
-                        url: 'https://bnf.idm.oclc.org/login?url=http://www.mediapart.fr/licence',
+                    const licRes = await BnfLogin.httpRequest({
+                        url: 'https://www-mediapart-fr.bnf.idm.oclc.org/licence',
                         method: 'GET',
                         headers: {
                             'User-Agent': UA,
@@ -134,12 +134,15 @@
                             'Referer': 'https://www.google.com/'
                         }
                     });
+                    console.log('[BnF Proxy] Licence activation status:', licRes?.status, 'data.length:', (licRes?.data || '').length);
                 } catch (err) {
                     console.warn('[BnF Proxy] Échec activation licence Mediapart:', err);
                 }
             }
 
             onProgress('BnF Proxy', 'Téléchargement de la page...', 50);
+            console.log('[BnF Proxy] DEBUG proxyUrl:', proxyUrl);
+            console.log('[BnF Proxy] DEBUG cookieHeader length:', (cookieHeader || '').length, 'first 200:', (cookieHeader || '').substring(0, 200));
             const pageRes = await BnfLogin.httpRequest({
                 url: proxyUrl,
                 method: 'GET',
@@ -152,6 +155,11 @@
             if (!pageRes || pageRes.error) {
                 throw new Error(`[BnF Proxy] Erreur réseau : ${pageRes?.error || 'inconnue'}`);
             }
+            console.log('[BnF Proxy] DEBUG http status:', pageRes.status);
+            console.log('[BnF Proxy] DEBUG html length:', (pageRes.data || '').length);
+            console.log('[BnF Proxy] DEBUG html start:', (pageRes.data || '').substring(0, 1000));
+            console.log('[BnF Proxy] DEBUG html end:', (pageRes.data || '').slice(-300));
+
             if (pageRes.status >= 400) {
                 throw new Error(`[BnF Proxy] HTTP ${pageRes.status} pour ${proxyUrl}`);
             }
@@ -159,6 +167,34 @@
             const html = pageRes.data || '';
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
+
+            // DEBUG: cherche le contenu article caché dans le HTML
+            try {
+                const ldJsonMatches = html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+                for (const m of ldJsonMatches) {
+                    try {
+                        const ldData = JSON.parse(m[1]);
+                        const texts = [];
+                        if (ldData.articleBody) texts.push('articleBody');
+                        if (ldData.description) texts.push('description');
+                        if (ldData.text) texts.push('text');
+                        console.log('[BnF Proxy] DEBUG ld+json keys:', Object.keys(ldData).join(','), 'found:', texts.join(','));
+                        if (ldData.articleBody) {
+                            console.log('[BnF Proxy] DEBUG articleBody length:', ldData.articleBody.length, 'preview:', ldData.articleBody.substring(0, 200));
+                        }
+                    } catch(e) {}
+                }
+                // Cherche des gros blocs de texte dans les scripts
+                const allScripts = doc.querySelectorAll('script');
+                for (const s of allScripts) {
+                    const t = (s.textContent || '').trim();
+                    if (t.length > 1000 && /article|content|text|body/i.test(t.substring(0, 200))) {
+                        console.log('[BnF Proxy] DEBUG large script:', (s.id || s.type || 'no-id'), 'length:', t.length, 'preview:', t.substring(0, 300));
+                    }
+                }
+            } catch (e) {
+                console.warn('[BnF Proxy] DEBUG content search error:', e.message);
+            }
 
             const oclcUsernameInput = doc.querySelector('input[name="j_username"]');
             const oclcPasswordInput = doc.querySelector('input[name="j_password"]');
@@ -196,7 +232,11 @@
 
             const paywallEl = doc.querySelector(siteConfig.paywallSelector);
             const textLength = contentEl ? contentEl.textContent.trim().length : 0;
+            console.log('[BnF Proxy] DEBUG paywallEl:', !!paywallEl, 'textLength:', textLength, 'contentEl:', !!contentEl);
             if (paywallEl && textLength < 800) {
+                console.log('[BnF Proxy] DEBUG paywall HTML:', paywallEl.outerHTML.substring(0, 500));
+                console.log('[BnF Proxy] DEBUG page title:', doc.title);
+                console.log('[BnF Proxy] DEBUG meta robots:', doc.querySelector('meta[name="robots"]')?.getAttribute('content'));
                 throw new Error(`Paywall encore actif sur ${siteConfig.name}. Vérifiez votre session BnF.`);
             }
 

@@ -17,6 +17,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(CafeynLoginPlugin.class);
         registerPlugin(IntentForwarderPlugin.class);
         registerPlugin(BackgroundPollPlugin.class);
+        registerPlugin(HeadlessScrapePlugin.class);
 
         super.onCreate(savedInstanceState);
 
@@ -50,7 +51,8 @@ public class MainActivity extends BridgeActivity {
                 String sharedTitle = intent.getStringExtra(Intent.EXTRA_SUBJECT);
                 if (sharedText != null) {
                     Log.i(TAG, "SEND text: " + sharedText);
-                    notifyJs("sharedText", sharedText);
+                    // L'IntentForwarderPlugin notifie déjà le JS via intentReceived → handleSharedContent
+                    // Le service n'est démarré que pour ACTION_VIEW (liens directs) et PROCESS_TEXT
                 }
             }
         } else if (Intent.ACTION_PROCESS_TEXT.equals(action)) {
@@ -58,7 +60,13 @@ public class MainActivity extends BridgeActivity {
             if (processedText != null) {
                 String text = processedText.toString();
                 Log.i(TAG, "PROCESS_TEXT: " + text);
-                notifyJs("sharedText", text);
+                try {
+                    Intent serviceIntent = new Intent(this, ScrapeForegroundService.class);
+                    serviceIntent.putExtra("url", text);
+                    startForegroundService(serviceIntent);
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to start ScrapeForegroundService: " + e.getMessage());
+                }
                 Intent resultIntent = new Intent();
                 resultIntent.putExtra(Intent.EXTRA_PROCESS_TEXT, text);
                 setResult(RESULT_OK, resultIntent);
@@ -67,7 +75,13 @@ public class MainActivity extends BridgeActivity {
             String url = intent.getDataString();
             if (url != null) {
                 Log.i(TAG, "VIEW URL: " + url);
-                notifyJs("sharedUrl", url);
+                try {
+                    Intent serviceIntent = new Intent(this, ScrapeForegroundService.class);
+                    serviceIntent.putExtra("url", url);
+                    startForegroundService(serviceIntent);
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to start ScrapeForegroundService: " + e.getMessage());
+                }
             }
         }
     }

@@ -45,7 +45,7 @@
             return {
                 bnfCookies: result.cookies,
                 bnfCookiesHeader: result.cookieHeader || '',
-                bnfCookiesExpiry: Date.now() + (8 * 60 * 60 * 1000)
+                bnfCookiesExpiry: Date.now() + (2 * 60 * 60 * 1000)
             };
         }
     };

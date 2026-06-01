@@ -1,6 +1,6 @@
 {
   "appId": "io.qzz.pressecraper",
-  "appName": "Presse Scraper",
+  "appName": "Archive Presse",
   "webDir": "www",
   "server": {
     "cleartextTrafficPermitted": false,
@@ -14,6 +14,9 @@
       },
       "CafeynLogin": {
         "package": "io.qzz.pressecraper.CafeynLoginPlugin"
+      },
+      "HeadlessScrape": {
+        "package": "io.qzz.pressecraper.HeadlessScrapePlugin"
       }
     }
 }

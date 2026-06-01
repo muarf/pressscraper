@@ -5,7 +5,14 @@
 
     function processTitleToQuery(title) {
         if (!title) return null;
-        let cleanTitle = title.split(/ - | \| | — | · /)[0];
+        let cleanTitle = title;
+        const parts = title.split(/ - | \| | — | · /);
+        if (parts.length > 1) {
+            const sectionPrefixes = ['en direct', 'vidéo', 'video', 'info', 'info ', 'replay', 'exclusif', 'live', 'en images', 'podcast', 'diaporama'];
+            const firstWord = parts[0].toLowerCase().trim();
+            const isPrefix = sectionPrefixes.some(p => firstWord === p || firstWord.startsWith(p));
+            cleanTitle = isPrefix ? parts.slice(1).join(' - ') : parts[0];
+        }
         cleanTitle = cleanTitle.replace(/[''""'‘`]/g, ' ');
         cleanTitle = cleanTitle.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()…?–—«»]/g, ' ');
         const words = cleanTitle.toLowerCase().split(/\s+/).filter(Boolean);

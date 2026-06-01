@@ -17,7 +17,14 @@
 
     function processTitleToQuery(title) {
         if (!title) return null;
-        let cleanTitle = title.split(/ - | \| | — | · /)[0];
+        let cleanTitle = title;
+        const parts = title.split(/ - | \| | — | · /);
+        if (parts.length > 1) {
+            const sectionPrefixes = ['en direct', 'vidéo', 'video', 'info', 'info ', 'replay', 'exclusif', 'live', 'en images', 'podcast', 'diaporama'];
+            const firstWord = parts[0].toLowerCase().trim();
+            const isPrefix = sectionPrefixes.some(p => firstWord === p || firstWord.startsWith(p));
+            cleanTitle = isPrefix ? parts.slice(1).join(' - ') : parts[0];
+        }
         cleanTitle = cleanTitle.replace(/[''""'‘`]/g, ' ');
         cleanTitle = cleanTitle.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()…?–—«»]/g, ' ');
         const words = cleanTitle.toLowerCase().split(/\s+/).filter(Boolean);
@@ -142,7 +149,7 @@
         }
 
         cachedIsUrl = true;
-        onProgress('Scraper', 'Récupération du titre...', 10);
+        onProgress('Récupération', 'Récupération du titre...', 10);
         let articleTitle = fallbackTitle || '';
         let publishedDate = '';
         let articleDescription = '';
@@ -229,10 +236,10 @@
             }
         }
 
-        // Étape 3 : Réessai avec 5 mots si toujours aucun résultat
+        // Étape 3 : Réessai avec 5 premiers mots
         if ((!items || items.length === 0) && words.length > 5) {
             const query5 = words.slice(0, 5).join(' ');
-            console.log('[ORCH] Retry with 5-word query:', query5);
+            console.log('[ORCH] Retry with first 5 words:', query5);
             try {
                 items = await searchFn(query5);
             } catch (e) {
@@ -240,7 +247,18 @@
             }
         }
 
-        // Étape 4 : Réessai sans élisions
+        // Étape 4 : Réessai avec les 5 derniers mots
+        if ((!items || items.length === 0) && words.length > 5) {
+            const queryLast5 = words.slice(-5).join(' ');
+            console.log('[ORCH] Retry with last 5 words:', queryLast5);
+            try {
+                items = await searchFn(queryLast5);
+            } catch (e) {
+                console.warn('[ORCH] Search failed with last-5 query:', e.message);
+            }
+        }
+
+        // Étape 5 : Réessai sans élisions
         if (!items || items.length === 0) {
             const filteredWords = words.filter(w => !/^l[aeiouyéàèùâêîôûëïü]/i.test(w));
             if (filteredWords.length > 0 && filteredWords.length < words.length) {
@@ -282,7 +300,7 @@
         const UA = await getUA();
 
         // Build prioritized list of (connector, service) pairs from registry
-        const providerOrder = state.providerOrder || ['bpc', 'pressreader', 'cafeyn', 'bnf', 'bnf-proxy'];
+        const providerOrder = state.providerOrder || ['bpc', 'pressreader', 'cafeyn', 'bnf'];
         const providerEnabled = state.providerEnabled || {};
 
         // Map provider IDs to registry pair IDs
@@ -301,8 +319,60 @@
             .map(id => global.Registry.getPair(id))
             .filter(Boolean);
 
+        // Inject bnf-proxy dynamically if BnF is enabled and URL matches Mediapart/ASI
+        if (isUrl && providerEnabled['bnf'] !== false) {
+            const bnfProxyPair = global.Registry.getPair('bnf-proxy');
+            if (bnfProxyPair && bnfProxyPair.service?.supportsUrl?.(titleOrUrl)) {
+                const alreadyIn = pairs.some(p => p.id === 'bnf-proxy');
+                if (!alreadyIn) {
+                    const hasCredentials = !!(state.bnfCookiesHeader || state.bnfUsername);
+                    if (hasCredentials) {
+                        // BnF Proxy en premier si credentials disponibles
+                        pairs.unshift(bnfProxyPair);
+                        console.log('[ORCH] bnf-proxy prioritaire pour', titleOrUrl);
+                    } else {
+                        // Sinon après bnf (fallback)
+                        const bnfIdx = pairs.findIndex(p => p.id === 'bnf');
+                        pairs.splice(bnfIdx >= 0 ? bnfIdx + 1 : pairs.length, 0, bnfProxyPair);
+                        console.log('[ORCH] bnf-proxy injecté après bnf pour', titleOrUrl);
+                    }
+                }
+            }
+        }
+
         if (pairs.length === 0) {
             throw new Error('Aucun fournisseur activé. Vérifiez vos paramètres.');
+        }
+
+        // ── BnF session pre-check ──
+        // If cookies are locally valid, verify they're still alive server-side
+        // so both europresse and bnf-proxy start with a fresh session.
+        if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.BnfLogin?.httpRequest) {
+            const bnfConnector = global.BnfConnector;
+            if (bnfConnector && bnfConnector.isReady(state)) {
+                try {
+                    const cookieH = (bnfConnector.getAuthHeaders(state) || {})['Cookie'] || '';
+                    const checkRes = await window.Capacitor.Plugins.BnfLogin.httpRequest({
+                        url: 'https://nouveau-europresse-com.bnf.idm.oclc.org/Search/Reading',
+                        method: 'GET',
+                        headers: { 'Cookie': cookieH, 'User-Agent': UA }
+                    });
+                    const hasToken = checkRes.data && checkRes.data.includes('__RequestVerificationToken');
+                    if (!hasToken) {
+                        console.log('[ORCH] BnF session expired server-side, refreshing...');
+                        const refreshed = await bnfConnector.refresh(state);
+                        if (refreshed) Object.assign(state, refreshed);
+                    }
+                } catch (checkErr) {
+                    console.warn('[ORCH] BnF session check failed, refreshing:', checkErr.message);
+                    try {
+                        const refreshed = await bnfConnector.refresh(state);
+                        if (refreshed) Object.assign(state, refreshed);
+                    } catch (refreshErr) {
+                        console.warn('[ORCH] BnF session refresh failed:', refreshErr.message);
+                    }
+                }
+            }
         }
 
         let lastError = null;
@@ -335,7 +405,7 @@
 
                 if (service.id === 'bpc') {
                     if (!isUrl) continue;
-                    onProgress('Bypass Direct', 'Bypass direct...', 10);
+                    onProgress('Plugin', 'Lecture directe...', 10);
                     result = await service.fetchByUrl(titleOrUrl, authHeaders, onProgress);
                     if (result) return result;
                     continue;
@@ -503,6 +573,21 @@
                             (q) => window.CafeynService.search(q).then(r => r.articles?.collection || []),
                             query
                         );
+                        if ((!searchRes || searchRes.length === 0) && isUrl) {
+                            try {
+                                const pubMatch = titleOrUrl.match(/https?:\/\/(?:www\.)?([^.]+)\./);
+                                if (pubMatch) {
+                                    const pubQuery = query + ' ' + pubMatch[1];
+                                    console.log('[Cafeyn] Retry with publication:', pubQuery);
+                                    searchRes = await retrySearch(
+                                        (q) => window.CafeynService.search(q).then(r => r.articles?.collection || []),
+                                        pubQuery
+                                    );
+                                }
+                            } catch (e) {
+                                console.warn('[Cafeyn] Publication search retry failed:', e.message);
+                            }
+                        }
 
                         let bestMatch = null;
                         let maxSim = 0;
@@ -638,7 +723,7 @@
 
         // All pairs exhausted — build error message
         const { title: finalTitle, date: finalDate } = await extractTitleFromUrl(titleOrUrl, fallbackTitle, state, onProgress);
-        let errorMsg = "Aucun fournisseur n'a pu récupérer cet article.";
+        let errorMsg = "Aucune source n'a pu récupérer cet article.";
         if (finalTitle) errorMsg += ` Termes recherchés : "${finalTitle.substring(0, 60)}".`;
         if (finalDate) {
             try {

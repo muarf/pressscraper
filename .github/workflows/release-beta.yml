@@ -1,15 +1,9 @@
-name: Build & Release APK
+name: Build & Release Beta APK
 
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag name for the release (ex: v1.1.1)'
-        required: true
-        default: 'v1.1.1'
+      - 'v*-beta*'
 
 permissions:
   contents: write
@@ -19,12 +13,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Skip beta tags
-        if: contains(github.ref_name, '-beta')
-        run: exit 0
-
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: beta
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -32,7 +24,7 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Setup Java 17
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -64,10 +56,10 @@ jobs:
           mv android/app/build/outputs/apk/release/app-release-unsigned-signed.apk \
              android/app/build/outputs/apk/release/pressscraper-${{ github.ref_name }}.apk
 
-      - name: Create Release
+      - name: Create Prerelease
         uses: softprops/action-gh-release@v2
         with:
-          name: Release ${{ github.ref_name }}
+          name: Beta ${{ github.ref_name }}
           body_path: CHANGELOG.md
           files: android/app/build/outputs/apk/release/pressscraper-${{ github.ref_name }}.apk
-          generate_release_notes: true
+          prerelease: true

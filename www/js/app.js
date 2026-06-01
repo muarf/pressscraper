@@ -1,12 +1,69 @@
 /**
- * app.js — Logique UI principale, gestion de l'état et navigation — Presse Scraper
+ * app.js — Logique UI principale, gestion de l'état et navigation — Archive Presse
  *
  * Dépendances (chargées avant ce fichier dans index.html) :
  *   - db.js   → window.DB
- *   - scraper.js → window.Scraper
+ *   - scraper.js → window.Scraper (interne)
  */
 (function() {
     'use strict';
+
+    // ===== DEBUG LOG BUFFER =====
+    const DEBUG_LOG_MAX = 100;
+    const debugLogs = [];
+
+    function addLog(level, args) {
+        try {
+            const msg = Array.from(args).map(a =>
+                typeof a === 'object' ? (a.message || JSON.stringify(a).substring(0, 300)) : String(a)
+            ).join(' ');
+            const ts = new Date().toLocaleTimeString('fr-FR', { hour12: false });
+            debugLogs.unshift('[' + ts + '][' + level + '] ' + msg);
+            if (debugLogs.length > DEBUG_LOG_MAX) debugLogs.length = DEBUG_LOG_MAX;
+        } catch(_) {}
+    }
+
+    // Intercept console methods
+    const origLog = console.log.bind(console);
+    const origWarn = console.warn.bind(console);
+    const origError = console.error.bind(console);
+    console.log = (...a) => { addLog('LOG', a); origLog(...a); };
+    console.warn = (...a) => { addLog('WARN', a); origWarn(...a); };
+    console.error = (...a) => { addLog('ERR', a); origError(...a); };
+
+    window.copyDebugLogs = function() {
+        const text = debugLogs.join('\n');
+        if (!text) { toast('Aucun log disponible', 'error'); return; }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => toast('Logs copiés !', 'success')).catch(() => fallbackCopy(text));
+        } else {
+            fallbackCopy(text);
+        }
+        function fallbackCopy(t) {
+            const ta = document.createElement('textarea');
+            ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); toast('Logs copiés !', 'success'); } catch(_) { toast('Copie impossible', 'error'); }
+            document.body.removeChild(ta);
+        }
+    };
+
+    // Auto-refresh debug display when settings are open
+    let debugRefreshInterval = null;
+    function startDebugRefresh() {
+        stopDebugRefresh();
+        debugRefreshInterval = setInterval(() => {
+            const el = document.getElementById('debugLogDisplay');
+            if (!el || document.getElementById('settingsScreen').classList.contains('hidden')) {
+                stopDebugRefresh();
+                return;
+            }
+            el.textContent = debugLogs.slice(0, 50).join('\n') || '(aucun log)';
+        }, 1000);
+    }
+    function stopDebugRefresh() {
+        if (debugRefreshInterval) { clearInterval(debugRefreshInterval); debugRefreshInterval = null; }
+    }
 
     // ===== CONFIG =====
     const STORAGE_KEY = 'presse_scraper_v3';
@@ -70,6 +127,12 @@
                     parsed.providerOrder = ['bpc', 'pressreader', 'cafeyn', 'bnf'];
                     console.log('[MIGRATE] providerOrder réinitialisé à bpc-first');
                 }
+                // Migration v3 : retirer bnf-proxy de la config (géré automatiquement par l'orchestrateur)
+                if (parsed.providerOrder && parsed.providerOrder.includes('bnf-proxy')) {
+                    parsed.providerOrder = parsed.providerOrder.filter(p => p !== 'bnf-proxy');
+                    delete parsed.providerEnabled['bnf-proxy'];
+                    console.log('[MIGRATE] bnf-proxy retiré de la config');
+                }
                 Object.assign(state, parsed);
             }
         } catch(e) { console.warn('[APP] loadState parse error:', e); }
@@ -80,9 +143,13 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
             providerOrder: state.providerOrder || ['bpc', 'pressreader', 'cafeyn', 'bnf'],
             providerEnabled: state.providerEnabled || {},
+            bnfUsername: state.bnfUsername || '',
+            bnfPassword: state.bnfPassword || '',
             bnfCookies: state.bnfCookies,
             bnfCookiesHeader: state.bnfCookiesHeader,
             bnfCookiesExpiry: state.bnfCookiesExpiry,
+            cafeynUsername: state.cafeynUsername || '',
+            cafeynPassword: state.cafeynPassword || '',
             cafeynJwt: state.cafeynJwt || '',
             cafeynCookies: state.cafeynCookies,
             cafeynCookiesHeader: state.cafeynCookiesHeader,
@@ -183,16 +250,19 @@
             }
         }
 
-        // 3. Vérifier les mises à jour
+        // 3. Afficher la version
+        window.showAppVersion();
+
+        // 4. Vérifier les mises à jour bêta
         if (typeof window.Updater !== 'undefined' && typeof window.Capacitor !== 'undefined') {
-            window.Updater.checkForUpdates(false).then(() => {
+            window.Updater.checkForBetaUpdates(false).then(() => {
                 if (window.Updater.state.available) {
                     showUpdatePrompt();
                 }
             });
         }
 
-        // 4. Décider quel écran afficher
+        // 5. Décider quel écran afficher
         // Appliquer le thème et la taille de police
         window.setTheme(state.theme || 'dark');
         applyFontSize(state.articleFontSize || 16);
@@ -244,7 +314,7 @@
         if (!btn || !status) return;
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installation...';
-        status.textContent = 'Téléchargement des règles BPC...';
+            status.textContent = 'Téléchargement du plugin...';
 
         try {
             const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
@@ -268,7 +338,7 @@
                 await window.Scraper.initBpc();
             }
 
-            status.textContent = 'Règles BPC installées avec succès !';
+            status.textContent = 'Plugin installé avec succès !';
             status.style.color = 'var(--success)';
             btn.innerHTML = '<i class="fas fa-check"></i> Installé';
         } catch(e) {
@@ -276,7 +346,7 @@
             status.textContent = 'Échec: ' + e.message;
             status.style.color = 'var(--accent)';
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-download"></i> Installer les règles BPC';
+            btn.innerHTML = '<i class="fas fa-download"></i> Installer le plugin';
         }
     };
 
@@ -404,7 +474,7 @@
         document.querySelector(`.nav-btn[data-screen="${screenId}"]`)?.classList.add('active');
 
         if (screenId === 'historyScreen') renderFullHistory();
-        if (screenId === 'settingsScreen') updateSettingsUI();
+        if (screenId === 'settingsScreen') { updateSettingsUI(); startDebugRefresh(); } else { stopDebugRefresh(); }
     };
 
     // ===== ONBOARDING WIZARD LOGIC =====
@@ -433,7 +503,7 @@
                 state.bnfPassword = password;
                 state.bnfCookies = result.cookies;
                 state.bnfCookiesHeader = result.cookieHeader || '';
-                state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
+                state.bnfCookiesExpiry = Date.now() + (2 * 60 * 60 * 1000);
                 save();
 
                 successEl.textContent = 'Connexion BnF réussie !';
@@ -638,7 +708,7 @@
         if (!input) { toast('Entrez un lien d\'article ou des mots-clés', 'error'); return; }
 
         if (!navigator.onLine) {
-            toast('Aucune connexion Internet. Le scraping nécessite une connexion réseau.', 'error');
+            toast('Aucune connexion Internet. La récupération nécessite une connexion réseau.', 'error');
             return;
         }
 
@@ -682,10 +752,12 @@
         let sessionRetry = false;
         const startTime = Date.now();
         const MAX_SCRAPE_DURATION_MS = 120_000;
+        if (window._scrapingInProgress) { console.warn('[SCRAPE] Déjà en cours, ignoré'); return; }
+        window._scrapingInProgress = true;
         try {
             while (true) {
                 if (Date.now() - startTime > MAX_SCRAPE_DURATION_MS) {
-                    throw new Error('Timeout global de scraping dépassé (120s)');
+                    throw new Error('Délai de récupération dépassé (120s)');
                 }
                 // Renouvellement automatique de session si expirée localement
                 if (!areCookiesValid() && state.bnfUsername && state.bnfPassword) {
@@ -696,7 +768,7 @@
                         if (result.success && result.cookies) {
                             state.bnfCookies = result.cookies;
                             state.bnfCookiesHeader = result.cookieHeader || '';
-                            state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
+                            state.bnfCookiesExpiry = Date.now() + (2 * 60 * 60 * 1000);
                             save();
                         } else {
                             throw new Error(result.error || 'Reconnexion BnF échouée');
@@ -769,6 +841,7 @@
 
                     resetScrapeBtn();
                     toast('✅ Article sauvegardé localement !', 'success');
+                    try { navigator.vibrate(400); } catch(_) {}
                     showNativeNotification('📰 Article téléchargé', scraped.title, articleId);
                     renderHistory();
                     openArticleById(articleId);
@@ -784,7 +857,7 @@
                         if (result.success && result.cookies) {
                             state.bnfCookies = result.cookies;
                             state.bnfCookiesHeader = result.cookieHeader || '';
-                            state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
+                            state.bnfCookiesExpiry = Date.now() + (2 * 60 * 60 * 1000);
                             save();
                             sessionRetry = true;
                             continue; // Relancer le scraping
@@ -796,6 +869,17 @@
 
         } catch(e) {
             console.error('[SCRAPE] Error:', e);
+
+            // In headless mode, report error to native bridge so the service shows
+            // an error notification instead of timing out silently
+            if (window._headlessMode && typeof window.HeadlessBridge !== 'undefined') {
+                window.HeadlessBridge.showNotification(
+                    '❌ Échec du téléchargement',
+                    e.message.substring(0, 200),
+                    ''
+                );
+            }
+
             card.className = 'status-card visible error';
             icon.className = 'fas fa-exclamation-triangle';
             document.getElementById('statusTitle').textContent = 'Erreur';
@@ -807,6 +891,8 @@
             }
             
             resetScrapeBtn();
+        } finally {
+            window._scrapingInProgress = false;
         }
     };
 
@@ -814,7 +900,7 @@
         const btn = document.getElementById('scrapeBtn');
         btn.disabled = false;
         btn.classList.remove('loading');
-        btn.innerHTML = '<i class="fas fa-magic"></i> Scraper';
+                btn.innerHTML = '<i class="fas fa-magic"></i> Sauvegarder';
     }
 
     // ===== VISIONNEUSE D'ARTICLE =====
@@ -1085,7 +1171,7 @@
         if (!btn) return;
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mise à jour...';
-        toast('Mise à jour des règles BPC...', '');
+                            toast('Mise à jour du plugin...', '');
 
         try {
             const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
@@ -1101,7 +1187,7 @@
                 localStorage.setItem('bpc_script_js', res.script_js);
                 localStorage.setItem('bpc_script_fr_js', res.script_fr_js);
             } else {
-                throw new Error("La mise à jour des règles BPC nécessite d'être sur l'application mobile.");
+                throw new Error("La mise à jour du plugin nécessite l'application mobile.");
             }
 
             state.bpcRulesUpdated = true;
@@ -1114,7 +1200,7 @@
             }
 
             updateBpcStatusUI();
-            toast('Règles BPC mises à jour !', 'success');
+            toast('Plugin mis à jour !', 'success');
         } catch(e) {
             console.error('[BPC] Update failed:', e);
             toast('Mise à jour échouée: ' + e.message, 'error');
@@ -1140,7 +1226,7 @@
             if (result.success && result.cookies) {
                 state.bnfCookies = result.cookies;
                 state.bnfCookiesHeader = result.cookieHeader || '';
-                state.bnfCookiesExpiry = Date.now() + (8 * 60 * 60 * 1000);
+                state.bnfCookiesExpiry = Date.now() + (2 * 60 * 60 * 1000);
                 save();
                 updateCookieStatusUI();
                 toast('Session BnF renouvelée', 'success');
@@ -1178,7 +1264,7 @@
         bnf: 'BnF Europresse',
         cafeyn: 'Cafeyn',
         pressreader: 'PressReader',
-        bpc: 'Bypass Paywall (direct)'
+        bpc: 'Plugin de lecture'
     };
 
     window.renderProviderOrderList = function() {
@@ -1361,11 +1447,11 @@
         }
     }
 
-    // ===== AUTO-UPDATE =====
+    // ===== AUTO-UPDATE (Bêta) =====
     window.showUpdatePrompt = function() {
         const latest = window.Updater.state.latestVersion;
         const toastEl = document.getElementById('toast');
-        document.getElementById('toastText').innerHTML = `Mise à jour disponible : ${latest} <span style="text-decoration:underline;cursor:pointer;font-weight:700;" onclick="applyUpdate()">Télécharger</span>`;
+        document.getElementById('toastText').innerHTML = `Mise à jour bêta : ${latest} <span style="text-decoration:underline;cursor:pointer;font-weight:700;" onclick="applyUpdate()">Télécharger</span>`;
         toastEl.className = 'toast show';
         clearTimeout(window._toastTimer);
     };
@@ -1376,6 +1462,7 @@
         toast('Téléchargement de la mise à jour...', '');
         try {
             await window.Updater.downloadAndInstall();
+            if (window.Updater.markBetaInstalled) window.Updater.markBetaInstalled();
             toast('Installation en cours...', 'success');
         } catch(e) {
             toast('Échec: ' + e.message, 'error');
@@ -1386,16 +1473,29 @@
         const statusEl = document.getElementById('updateStatusText');
         statusEl.textContent = 'Vérification...';
         try {
-            await window.Updater.checkForUpdates(true);
+            await window.Updater.checkForBetaUpdates(true);
             if (window.Updater.state.available) {
-                statusEl.textContent = 'Mise à jour disponible : ' + window.Updater.state.latestVersion;
+                statusEl.textContent = 'Bêta disponible : ' + window.Updater.state.latestVersion;
                 showUpdatePrompt();
             } else {
-                statusEl.textContent = 'Dernière version : ' + window.Updater.state.latestVersion + ' (à jour)';
+                statusEl.textContent = 'Dernière version bêta : ' + window.Updater.state.latestVersion + ' (à jour)';
             }
         } catch(e) {
             statusEl.textContent = 'Erreur: ' + e.message;
         }
+    };
+
+    window.showAppVersion = async function() {
+        const el = document.getElementById('appVersionText');
+        if (!el) return;
+        try {
+            const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
+            if (BnfLogin && typeof BnfLogin.getAppVersion === 'function') {
+                const res = await BnfLogin.getAppVersion();
+                if (res.versionName) { el.textContent = res.versionName; return; }
+            }
+        } catch(e) { /* ignore */ }
+        el.textContent = '1.1.0';
     };
 
     window.clearCache = async function() {

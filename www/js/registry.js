@@ -16,7 +16,7 @@
     const REGISTRY = [
         {
             id: 'bpc',
-            name: 'Bypass Paywall (direct)',
+            name: 'Plugin de lecture',
             connector: 'noop',
             service: 'bpc'
         },

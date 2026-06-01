@@ -13,6 +13,18 @@
     // UA de secours utilisé si le plugin natif n'est pas disponible (tests navigateur)
     const UA_FALLBACK = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 
+    // CSS pour le rendu PDF et la visionneuse
+    global.PRINT_CSS = `
+        @page { margin: 15mm 20mm; size: A4; }
+        @media print {
+            body { font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; color: #000; background: #fff; padding: 0; margin: 0; }
+            h1 { font-size: 18pt; font-weight: bold; margin-bottom: 12pt; line-height: 1.3; border-bottom: 1px solid #ccc; padding-bottom: 8pt; page-break-after: avoid; }
+            p, li, blockquote, figure { page-break-inside: avoid; orphans: 3; widows: 3; }
+            img { max-width: 100%; page-break-inside: avoid; }
+            a::after { content: ""; }
+        }
+    `;
+
     // ===== BnF PROXY CONFIG =====
     // Correspondances : domaine original → sous-domaine EZProxy BnF
     const BNF_PROXY_SITES = [
@@ -21,18 +33,16 @@
             domains: ['mediapart.fr', 'www.mediapart.fr'],
             proxyHost: 'www-mediapart-fr.bnf.idm.oclc.org',
             name: 'Mediapart',
-            // Sélecteur du bloc de contenu de l'article
             contentSelector: '.paywall-restricted-content, .news__body__center__article, .content-article, .article__content, [data-module="article-body"], .article-body',
-            // Sélecteur du paywall résiduel éventuel
-            paywallSelector: '.paywall, #paywall, [class*="paywall"], .register-wall, .subscribe'
+            paywallSelector: '#paywall, .paywall, .register-wall, .subscribe'
         },
         {
             // Arrêt sur Images
             domains: ['arretsurimages.net', 'www.arretsurimages.net'],
             proxyHost: 'www-arretsurimages-net.bnf.idm.oclc.org',
             name: 'Arrêt sur Images',
-            contentSelector: '.article-content, .entry-content, .post-content, article .content, [class*="article-body"]',
-            paywallSelector: '.paywall, #paywall, [class*="paywall"], .subscribe-wall'
+            contentSelector: '.page-content, .article-content, .entry-content, .post-content, article .content, [class*="article-body"]',
+            paywallSelector: '.paywall-block.paywall-callToAction, .paywall, #paywall, .subscribe-wall'
         }
     ];
 
@@ -84,7 +94,7 @@
             onProgress('BnF Proxy', 'Authentification Arrêt sur Images...', 20);
             try {
                 const autologinRes = await BnfLogin.httpRequest({
-                    url: 'https://bnf.idm.oclc.org/login?url=http://www.arretsurimages.net/autologin.php',
+                    url: 'https://bnf.idm.oclc.org/login?url=https://www.arretsurimages.net/autologin.php',
                     method: 'GET',
                     headers: {
                         'User-Agent': UA,
@@ -153,7 +163,7 @@
             try {
                 // Initialise la session de licence sur Mediapart en suivant les redirections
                 await BnfLogin.httpRequest({
-                    url: 'https://bnf.idm.oclc.org/login?url=http://www.mediapart.fr/licence',
+                    url: 'https://bnf.idm.oclc.org/login?url=https://www.mediapart.fr/licence',
                     method: 'GET',
                     headers: {
                         'User-Agent': UA,
@@ -608,7 +618,7 @@
                 return { title: extractedTitle, date: extractedDate, description: extractedDescription };
             }
 
-            onProgress('Scraper', 'Récupération du titre...', 10);
+            onProgress('Récupération', 'Récupération du titre...', 10);
             let articleTitle = fallbackTitle || '';
             let publishedDate = '';
             let articleDescription = '';
@@ -1188,7 +1198,7 @@
 
             if (provider === 'bpc') {
                 if (!isUrl) continue;
-                onProgress('Bypass Direct', 'Bypass direct...', 10);
+                onProgress('Plugin', 'Lecture directe...', 10);
                 try {
                     const urlObj = new URL(titleOrUrl);
                     const hostname = urlObj.hostname;
@@ -1210,7 +1220,7 @@
 
         // Aucun fournisseur n'a pu récupérer l'article
         const { title: finalTitle, date: finalDate } = await getExtractedTitleAndDate();
-        let errorMsg = "Aucun fournisseur n'a pu récupérer cet article.";
+        let errorMsg = "Aucune source n'a pu récupérer cet article.";
         if (finalTitle) {
             errorMsg += ` Termes recherchés : "${finalTitle.substring(0, 60)}".`;
         }
@@ -1225,7 +1235,7 @@
                 }
             } catch(e) {}
         }
-        errorMsg += " Vérifiez votre configuration et vos sessions (token BnF/Cafeyn expiré ?).";
+        errorMsg += " Vérifiez votre configuration et vos sessions.";
         throw new Error(errorMsg);
     }
 
@@ -1253,7 +1263,7 @@
             'Referer': 'https://www.google.com/' // Moteur de recherche comme Referer par défaut
         };
 
-        onProgress('Bypass Direct', 'Téléchargement de la page...', 20);
+        onProgress('Plugin', 'Téléchargement de la page...', 20);
 
         // 3. Téléchargement du HTML original
         let pageRes;
@@ -1272,7 +1282,7 @@
             throw new Error(`HTTP error ${pageRes?.status || 'unknown'} during direct fetch`);
         }
 
-        onProgress('Bypass Direct', 'Exécution des règles de bypass...', 40);
+        onProgress('Plugin', 'Extraction du contenu...', 40);
 
         // 4. Création de l'Iframe sandboxé pour exécuter le bypass
         const iframe = document.createElement('iframe');
@@ -1724,7 +1734,7 @@
         iframeDocument.head.appendChild(bootstrapScript);
 
         // 7. Attente active de la résolution du bypass
-        onProgress('Bypass Direct', 'Déverrouillage de l\'article...', 60);
+        onProgress('Plugin', 'Récupération du contenu...', 60);
 
         const startTime = Date.now();
         const checkInterval = 100;
@@ -1789,7 +1799,7 @@
         });
 
         // Extraction finale du contenu
-        onProgress('Bypass Direct', 'Extraction du texte...', 80);
+        onProgress('Plugin', 'Extraction du texte...', 80);
 
         let contentEl = null;
         if (contentSelector) {

@@ -2,8 +2,8 @@
     'use strict';
 
     const GITHUB_REPO = 'muarf/pressscraper';
-    const GITHUB_API = 'https://api.github.com/repos/' + GITHUB_REPO + '/releases/latest';
-    const APK_FILENAME = 'presse-scraper-update.apk';
+    const GITHUB_BETA_API = 'https://api.github.com/repos/' + GITHUB_REPO + '/releases?per_page=10';
+    const APK_FILENAME = 'presscraper-*.apk';
     const CHECK_KEY = 'update_last_check';
 
     let updateState = {
@@ -29,7 +29,7 @@
         return { name: '0.0.0', code: 0 };
     }
 
-    async function checkForUpdates(force) {
+    async function checkForBetaUpdates(force) {
         if (updateState.checking) return;
         if (!force) {
             const lastCheck = localStorage.getItem(CHECK_KEY);
@@ -40,46 +40,67 @@
 
         updateState.checking = true;
         try {
-            const res = await fetch(GITHUB_API, {
+            const res = await fetch(GITHUB_BETA_API, {
                 headers: { 'Accept': 'application/vnd.github.v3+json' }
             });
             if (!res.ok) return;
-            const data = await res.json();
+            const releases = await res.json();
+            if (!Array.isArray(releases) || releases.length === 0) return;
 
-            const latestTag = data.tag_name || '';
+            // Find the latest prerelease with an APK asset (sorted by semver tag, not API order)
+            const betas = releases
+                .filter(r => r.prerelease && r.assets && r.assets.some(a => a.name && a.name.endsWith('.apk')))
+                .sort((a, b) => {
+                    const aParts = (a.tag_name || '').replace(/^v/, '').split(/[.-]/).map(Number);
+                    const bParts = (b.tag_name || '').replace(/^v/, '').split(/[.-]/).map(Number);
+                    for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+                        const av = aParts[i] || 0, bv = bParts[i] || 0;
+                        if (av !== bv) return bv - av; // descending (newest first)
+                    }
+                    return 0;
+                });
+            const beta = betas[0];
+            if (!beta) return;
+
             const current = await getCurrentVersion();
-
+            const latestTag = beta.tag_name || '';
             updateState.latestVersion = latestTag;
-            updateState.releaseUrl = data.html_url || '';
+            updateState.releaseUrl = beta.html_url || '';
 
-            // Find APK asset
-            if (data.assets && data.assets.length) {
-                const apkAsset = data.assets.find(a => a.name && a.name.endsWith('.apk'));
-                if (apkAsset) {
-                    updateState.downloadUrl = apkAsset.browser_download_url;
-                }
+            const apkAsset = beta.assets.find(a => a.name && a.name.endsWith('.apk'));
+            if (apkAsset) {
+                updateState.downloadUrl = apkAsset.browser_download_url;
             }
 
-            // Compare versions (tags like v1.2.3)
-            const latestStr = latestTag.replace(/^v/, '');
-            const currentStr = current.name.replace(/^v/, '');
-            const latestParts = latestStr.split('.').map(Number);
-            const currentParts = currentStr.split('.').map(Number);
+            // Skip if this exact tag was already installed (avoids re-prompt loop)
+            const installedTag = localStorage.getItem('update_installed_tag');
+            if (installedTag === latestTag) {
+                updateState.available = false;
+                localStorage.setItem(CHECK_KEY, String(Date.now()));
+                return;
+            }
+
+            // Compare major.minor.patch
+            const latestParts = latestTag.replace(/^v/, '').split(/[.-]/).map(Number);
+            const currentParts = current.name.replace(/^v/, '').split(/[.-]/).map(Number);
 
             let isNewer = false;
-            for (let i = 0; i < Math.max(latestParts.length, currentParts.length); i++) {
+            for (let i = 0; i < 3; i++) {
                 const l = latestParts[i] || 0;
                 const c = currentParts[i] || 0;
                 if (l > c) { isNewer = true; break; }
                 if (l < c) break;
             }
+            // If major.minor.patch are equal, a prerelease tag is an update
+            // (the localStorage installedTag check prevents re-prompt loops)
+            if (!isNewer && latestTag.includes('-')) {
+                isNewer = true;
+            }
 
             updateState.available = isNewer;
-
             localStorage.setItem(CHECK_KEY, String(Date.now()));
-
         } catch(e) {
-            console.warn('[Updater] Check failed:', e);
+            console.warn('[Updater] Beta check failed:', e);
         } finally {
             updateState.checking = false;
         }
@@ -105,9 +126,16 @@
         }
     }
 
+    function markBetaInstalled() {
+        if (updateState.latestVersion) {
+            localStorage.setItem('update_installed_tag', updateState.latestVersion);
+        }
+    }
+
     global.Updater = {
-        checkForUpdates,
+        checkForBetaUpdates,
         downloadAndInstall,
+        markBetaInstalled,
         state: updateState
     };
 
