@@ -45,7 +45,7 @@ TEST_URLS = {
     "bpc": "https://www.leparisien.fr/meteo/on-na-jamais-battu-autant-de-records-en-mai-la-carte-des-villes-ou-le-thermometre-a-atteint-des-sommets-27-05-2026-7KB7BQHMPVCHZDZW2PLJ7B2QP4.php",
     "europresse": "https://www.lemonde.fr/international/article/2026/05/27/derriere-la-guerre-de-vladimir-poutine-le-role-croissant-du-fsb-l-agence-de-renseignement-russe_6694149_3210.html",
     "pressreader": "https://www.lefigaro.fr/meteo/en-direct-canicule-la-france-suffoque-sous-le-dome-de-chaleur-13-departements-en-vigilance-orange-et-la-vitesse-abaissee-en-ile-de-france-20260527",
-    "cafeyn": "https://www.lefigaro.fr/impots/qui-sont-ces-gros-patrimoines-qui-ne-paient-pas-d-impot-sur-le-revenu-20260527",
+    "cafeyn": "https://www.lefigaro.fr/actualite-france/manifestations-du-1er-mai-l-ultra-gauche-en-embuscade-et-les-forces-de-l-ordre-sur-le-qui-vive-20260429",
     "bnf-proxy": "https://www.arretsurimages.net/articles/affaire-pellan-le-rapport-qui-accable",
     "mediapart": "https://www.mediapart.fr/journal/france/270526/le-senat-vote-le-projet-de-loi-ripost-defouloir-securitaire-de-la-majorite",
 }
@@ -129,6 +129,12 @@ def install_apk(apk_path):
     out, err, rc = adb("install", "-r", apk_path, timeout=60)
     require(rc == 0, f"Install failed: {err or out}")
     print("OK")
+
+
+def set_webview_flag():
+    """Set --remote-allow-origins=* for WebView CDP debugging."""
+    flag = "com.google.android.webview --remote-allow-origins=*\\n"
+    adb_shell("printf", f"'{flag}'", ">", "/data/local/tmp/webview-command-line")
 
 
 def force_stop(package="io.qzz.pressecraper"):
@@ -233,8 +239,9 @@ class CDPConnection:
             self.page_id = pages[0]["id"]
             ws_url = pages[0]["webSocketDebuggerUrl"]
 
-        # Connect WebSocket
-        self.ws = websocket.create_connection(ws_url, timeout=10)
+        # Connect WebSocket (suppress Origin to avoid 403 on modern Chromium)
+        self.ws = websocket.create_connection(ws_url, timeout=10,
+            suppress_origin=True)
         # Enable Runtime and Console domains
         self._send("Runtime.enable")
         self._send("Console.enable")
@@ -395,6 +402,7 @@ def inject_credentials(cdp, bnf_user=None, bnf_pass=None, cafeyn_user=None, cafe
 
 def test_device_connection(ctx):
     force_stop()
+    set_webview_flag()
     time.sleep(1)
     adb_shell("am", "start", "-n", "io.qzz.pressecraper/.MainActivity")
     time.sleep(5)
@@ -842,6 +850,7 @@ def main():
     force_stop()
     clear_data()
     install_apk(apk_path)
+    set_webview_flag()
     time.sleep(2)
 
     # Run selected tests
