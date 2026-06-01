@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.5] - 2026-06-01
+- **Mise à jour automatique** : Correction du bug où l'application marquait une mise à jour comme installée même en cas d'annulation ou d'échec de signature.
+- **Comparaison de versions** : Implémentation d'une comparaison SemVer robuste pour les versions bêta.
+- **Correction Cafeyn** : Correction du script d'auto-remplissage pour le formulaire de connexion Cafeyn (IIFE).
+- **Proxy BnF** : Correction des requêtes HTTPS directes et priorisation de l'accès BnF.
+
 ## [1.1.0] - 2026-05-26
 - **BPC Paywall Bypass** - Added logic to bypass BPC paywalls.
 - **Mobile Override** - Added mobile overrides for specific publications to handle anonymous sessions.
