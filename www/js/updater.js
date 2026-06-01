@@ -14,6 +14,40 @@
         releaseUrl: ''
     };
 
+    function parseVersion(versionStr) {
+        if (!versionStr) return { major: 0, minor: 0, patch: 0, prerelease: null, prereleaseNum: 0 };
+        const clean = versionStr.replace(/^v/, '');
+        const match = clean.match(/^(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z]+)\.(\d+))?$/);
+        if (!match) return { major: 0, minor: 0, patch: 0, prerelease: null, prereleaseNum: 0 };
+        return {
+            major: parseInt(match[1], 10),
+            minor: parseInt(match[2], 10),
+            patch: parseInt(match[3], 10),
+            prerelease: match[4] || null,
+            prereleaseNum: match[5] ? parseInt(match[5], 10) : 0
+        };
+    }
+
+    function isVersionNewer(currentStr, latestStr) {
+        const c = parseVersion(currentStr);
+        const l = parseVersion(latestStr);
+
+        if (l.major !== c.major) return l.major > c.major;
+        if (l.minor !== c.minor) return l.minor > c.minor;
+        if (l.patch !== c.patch) return l.patch > c.patch;
+
+        // If one is release and one is prerelease of same version: release is newer
+        if (l.prerelease === null && c.prerelease !== null) return true;
+        if (l.prerelease !== null && c.prerelease === null) return false;
+
+        // If both are prerelease: compare their prerelease numbers
+        if (l.prerelease !== null && c.prerelease !== null) {
+            return l.prereleaseNum > c.prereleaseNum;
+        }
+
+        return false;
+    }
+
     async function getCurrentVersion() {
         const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
         if (BnfLogin && typeof BnfLogin.getAppVersion === 'function') {
@@ -72,32 +106,7 @@
                 updateState.downloadUrl = apkAsset.browser_download_url;
             }
 
-            // Skip if this exact tag was already installed (avoids re-prompt loop)
-            const installedTag = localStorage.getItem('update_installed_tag');
-            if (installedTag === latestTag) {
-                updateState.available = false;
-                localStorage.setItem(CHECK_KEY, String(Date.now()));
-                return;
-            }
-
-            // Compare major.minor.patch
-            const latestParts = latestTag.replace(/^v/, '').split(/[.-]/).map(Number);
-            const currentParts = current.name.replace(/^v/, '').split(/[.-]/).map(Number);
-
-            let isNewer = false;
-            for (let i = 0; i < 3; i++) {
-                const l = latestParts[i] || 0;
-                const c = currentParts[i] || 0;
-                if (l > c) { isNewer = true; break; }
-                if (l < c) break;
-            }
-            // If major.minor.patch are equal, a prerelease tag is an update
-            // (the localStorage installedTag check prevents re-prompt loops)
-            if (!isNewer && latestTag.includes('-')) {
-                isNewer = true;
-            }
-
-            updateState.available = isNewer;
+            updateState.available = isVersionNewer(current.name, latestTag);
             localStorage.setItem(CHECK_KEY, String(Date.now()));
         } catch(e) {
             console.warn('[Updater] Beta check failed:', e);
@@ -126,16 +135,9 @@
         }
     }
 
-    function markBetaInstalled() {
-        if (updateState.latestVersion) {
-            localStorage.setItem('update_installed_tag', updateState.latestVersion);
-        }
-    }
-
     global.Updater = {
         checkForBetaUpdates,
         downloadAndInstall,
-        markBetaInstalled,
         state: updateState
     };
 
