@@ -1462,7 +1462,6 @@
         toast('Téléchargement de la mise à jour...', '');
         try {
             await window.Updater.downloadAndInstall();
-            if (window.Updater.markBetaInstalled) window.Updater.markBetaInstalled();
             toast('Installation en cours...', 'success');
         } catch(e) {
             toast('Échec: ' + e.message, 'error');
