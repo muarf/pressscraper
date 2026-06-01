@@ -2,6 +2,8 @@ name: Build & Release Beta APK
 
 on:
   push:
+    branches:
+      - beta
     tags:
       - 'v*-beta*'
 
@@ -15,32 +17,47 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: beta
+
+      - name: Get Version Name
+        id: get_version
+        run: |
+          VERSION=$(grep "versionName" android/app/build.gradle | sed 's/.*versionName "\(.*\)"/\1/')
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+          if [[ "$VERSION" == *"-beta"* ]] || [[ "${{ github.ref_name }}" == *"-beta"* ]]; then
+            echo "is_beta=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_beta=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Setup Node.js
+        if: steps.get_version.outputs.is_beta == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'npm'
 
       - name: Setup Java 21
+        if: steps.get_version.outputs.is_beta == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: 21
 
       - name: Install dependencies
+        if: steps.get_version.outputs.is_beta == 'true'
         run: npm ci
 
       - name: Sync Capacitor (copy assets + plugins)
+        if: steps.get_version.outputs.is_beta == 'true'
         run: npx cap sync android
 
       - name: Build APK
+        if: steps.get_version.outputs.is_beta == 'true'
         working-directory: android
         run: ./gradlew assembleRelease
 
       - name: Sign APK
+        if: steps.get_version.outputs.is_beta == 'true'
         uses: r0adkll/sign-android-release@v1
         with:
           releaseDirectory: android/app/build/outputs/apk/release
@@ -52,14 +69,17 @@ jobs:
           BUILD_TOOLS_VERSION: "34.0.0"
 
       - name: Rename APK
+        if: steps.get_version.outputs.is_beta == 'true'
         run: |
           mv android/app/build/outputs/apk/release/app-release-unsigned-signed.apk \
-             android/app/build/outputs/apk/release/pressscraper-${{ github.ref_name }}.apk
+             android/app/build/outputs/apk/release/pressscraper-${{ steps.get_version.outputs.version }}.apk
 
       - name: Create Prerelease
+        if: steps.get_version.outputs.is_beta == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          name: Beta ${{ github.ref_name }}
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Beta ${{ steps.get_version.outputs.version }}
           body_path: CHANGELOG.md
-          files: android/app/build/outputs/apk/release/pressscraper-${{ github.ref_name }}.apk
+          files: android/app/build/outputs/apk/release/pressscraper-${{ steps.get_version.outputs.version }}.apk
           prerelease: true
