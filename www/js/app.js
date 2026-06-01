@@ -1447,11 +1447,13 @@
         }
     }
 
-    // ===== AUTO-UPDATE (Bêta) =====
+    // ===== AUTO-UPDATE =====
     window.showUpdatePrompt = function() {
         const latest = window.Updater.state.latestVersion;
+        const isBeta = latest.includes('-beta');
+        const label = isBeta ? 'Mise à jour bêta' : 'Mise à jour';
         const toastEl = document.getElementById('toast');
-        document.getElementById('toastText').innerHTML = `Mise à jour bêta : ${latest} <span style="text-decoration:underline;cursor:pointer;font-weight:700;" onclick="applyUpdate()">Télécharger</span>`;
+        document.getElementById('toastText').innerHTML = `${label} : ${latest} <span style="text-decoration:underline;cursor:pointer;font-weight:700;" onclick="applyUpdate()">Télécharger</span>`;
         toastEl.className = 'toast show';
         clearTimeout(window._toastTimer);
     };
@@ -1473,11 +1475,13 @@
         statusEl.textContent = 'Vérification...';
         try {
             await window.Updater.checkForBetaUpdates(true);
+            const latest = window.Updater.state.latestVersion;
+            const isBeta = latest.includes('-beta');
             if (window.Updater.state.available) {
-                statusEl.textContent = 'Bêta disponible : ' + window.Updater.state.latestVersion;
+                statusEl.textContent = (isBeta ? 'Bêta disponible : ' : 'Mise à jour disponible : ') + latest;
                 showUpdatePrompt();
             } else {
-                statusEl.textContent = 'Dernière version bêta : ' + window.Updater.state.latestVersion + ' (à jour)';
+                statusEl.textContent = (isBeta ? 'Dernière version bêta : ' : 'Dernière version : ') + latest + ' (à jour)';
             }
         } catch(e) {
             statusEl.textContent = 'Erreur: ' + e.message;

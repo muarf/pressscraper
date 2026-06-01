@@ -81,9 +81,9 @@
             const releases = await res.json();
             if (!Array.isArray(releases) || releases.length === 0) return;
 
-            // Find the latest prerelease with an APK asset (sorted by semver tag, not API order)
-            const betas = releases
-                .filter(r => r.prerelease && r.assets && r.assets.some(a => a.name && a.name.endsWith('.apk')))
+            // Find the latest release with an APK asset (sorted by semver tag, not API order)
+            const sortedReleases = releases
+                .filter(r => r.assets && r.assets.some(a => a.name && a.name.endsWith('.apk')))
                 .sort((a, b) => {
                     const aParts = (a.tag_name || '').replace(/^v/, '').split(/[.-]/).map(Number);
                     const bParts = (b.tag_name || '').replace(/^v/, '').split(/[.-]/).map(Number);
@@ -93,15 +93,15 @@
                     }
                     return 0;
                 });
-            const beta = betas[0];
-            if (!beta) return;
+            const latestRelease = sortedReleases[0];
+            if (!latestRelease) return;
 
             const current = await getCurrentVersion();
-            const latestTag = beta.tag_name || '';
+            const latestTag = latestRelease.tag_name || '';
             updateState.latestVersion = latestTag;
-            updateState.releaseUrl = beta.html_url || '';
+            updateState.releaseUrl = latestRelease.html_url || '';
 
-            const apkAsset = beta.assets.find(a => a.name && a.name.endsWith('.apk'));
+            const apkAsset = latestRelease.assets.find(a => a.name && a.name.endsWith('.apk'));
             if (apkAsset) {
                 updateState.downloadUrl = apkAsset.browser_download_url;
             }
