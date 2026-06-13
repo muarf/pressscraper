@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.1.8] - 2026-06-13
+- **Contournement DataDome** : Implémentation d'une méthode de téléchargement via WebView invisible (off-screen) pour contourner la protection anti-bot de *L'Usine Nouvelle* et d'autres publications protégées.
+
 ## [1.1.5] - 2026-06-01
 - **Mise à jour automatique** : Correction du bug où l'application marquait une mise à jour comme installée même en cas d'annulation ou d'échec de signature.
 - **Comparaison de versions** : Implémentation d'une comparaison SemVer robuste pour les versions bêta.

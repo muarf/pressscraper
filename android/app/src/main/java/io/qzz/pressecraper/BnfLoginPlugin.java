@@ -1162,6 +1162,122 @@ public class BnfLoginPlugin extends Plugin {
         }
     }
 
+    @PluginMethod()
+    public void fetchHtmlViaWebView(PluginCall call) {
+        String url = call.getString("url", "");
+        String userAgent = call.getString("userAgent", null);
+
+        if (url.isEmpty()) {
+            call.reject("URL is required");
+            return;
+        }
+
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try {
+                WebView tempWebView = new WebView(getContext());
+                tempWebView.getSettings().setJavaScriptEnabled(true);
+                tempWebView.getSettings().setDomStorageEnabled(true);
+                
+                if (userAgent != null && !userAgent.isEmpty()) {
+                    tempWebView.getSettings().setUserAgentString(userAgent);
+                }
+
+                // Add a timeout of 12 seconds
+                Handler timeoutHandler = new Handler(Looper.getMainLooper());
+                final boolean[] resolved = {false};
+                
+                Runnable timeoutRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        if (resolved[0]) return;
+                        resolved[0] = true;
+                        Log.w(TAG, "fetchHtmlViaWebView: Timeout reached for " + url);
+                        
+                        // Try to get what's loaded so far
+                        tempWebView.evaluateJavascript(
+                            "(function() { return document.documentElement.outerHTML; })()",
+                            value -> {
+                                JSObject result = new JSObject();
+                                try {
+                                    String html = "";
+                                    if (value != null && !value.equals("null")) {
+                                        html = new org.json.JSONTokener(value).nextValue().toString();
+                                    }
+                                    result.put("status", 200);
+                                    result.put("data", html);
+                                    result.put("timeout", true);
+                                    call.resolve(result);
+                                } catch (Exception ex) {
+                                    result.put("status", 500);
+                                    result.put("error", "Timeout occurred and extraction failed: " + ex.getMessage());
+                                    call.resolve(result);
+                                }
+                                tempWebView.destroy();
+                            }
+                        );
+                    }
+                };
+                timeoutHandler.postDelayed(timeoutRunnable, 12000);
+
+                tempWebView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public void onPageFinished(WebView view, String loadedUrl) {
+                        super.onPageFinished(view, loadedUrl);
+                        Log.d(TAG, "fetchHtmlViaWebView: finished loading " + loadedUrl);
+                        
+                        if (resolved[0]) return;
+                        
+                        timeoutHandler.removeCallbacks(timeoutRunnable);
+                        resolved[0] = true;
+
+                        view.evaluateJavascript(
+                            "(function() { return document.documentElement.outerHTML; })()",
+                            value -> {
+                                try {
+                                    String html = "";
+                                    if (value != null && !value.equals("null")) {
+                                        html = new org.json.JSONTokener(value).nextValue().toString();
+                                    }
+                                    JSObject result = new JSObject();
+                                    result.put("status", 200);
+                                    result.put("data", html);
+                                    call.resolve(result);
+                                } catch (Exception e) {
+                                    Log.e(TAG, "fetchHtmlViaWebView javascript eval error", e);
+                                    call.reject(e.getMessage());
+                                } finally {
+                                    view.destroy();
+                                }
+                            }
+                        );
+                    }
+
+                    @Override
+                    public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                        super.onReceivedError(view, errorCode, description, failingUrl);
+                        Log.e(TAG, "fetchHtmlViaWebView error: " + description + " for " + failingUrl);
+                        if (resolved[0]) return;
+                        timeoutHandler.removeCallbacks(timeoutRunnable);
+                        resolved[0] = true;
+                        
+                        JSObject result = new JSObject();
+                        result.put("status", errorCode);
+                        result.put("error", description);
+                        call.resolve(result);
+                        view.destroy();
+                    }
+                });
+
+                Log.d(TAG, "fetchHtmlViaWebView: loading " + url);
+                tempWebView.loadUrl(url);
+
+            } catch (Exception e) {
+                Log.e(TAG, "fetchHtmlViaWebView initialization error", e);
+                call.reject(e.getMessage());
+            }
+        });
+    }
+
     private String readEntryToString(java.util.zip.ZipInputStream zis, byte[] buffer) throws java.io.IOException {
         java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
         int len;

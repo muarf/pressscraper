@@ -127,15 +127,38 @@
 
         onProgress('Plugin', 'Téléchargement de la page...', 20);
 
-        let pageRes;
+        let pageRes = null;
+        let useFallback = false;
+
         if (BnfLogin) {
-            pageRes = await BnfLogin.httpRequest({ url: articleUrl, method: 'GET', headers });
+            try {
+                console.log('[BPC] Attempting direct HTTP fetch...');
+                pageRes = await BnfLogin.httpRequest({ url: articleUrl, method: 'GET', headers });
+                if (!pageRes || (pageRes.status !== 200 && pageRes.status !== 304)) {
+                    console.log('[BPC] Direct fetch failed or returned non-200 status:', pageRes?.status);
+                    useFallback = true;
+                }
+            } catch (err) {
+                console.warn('[BPC] Direct fetch error:', err);
+                useFallback = true;
+            }
+
+            if (useFallback && typeof BnfLogin.fetchHtmlViaWebView === 'function') {
+                console.log('[BPC] Falling back to WebView-based fetch...');
+                onProgress('Plugin', 'Contournement protection (WebView)...', 30);
+                try {
+                    pageRes = await BnfLogin.fetchHtmlViaWebView({ url: articleUrl, userAgent: customUA });
+                } catch (fallbackErr) {
+                    console.error('[BPC] WebView fetch failed:', fallbackErr);
+                }
+            }
         } else {
             const r = await fetch(articleUrl, { headers });
             pageRes = { status: r.status, data: await r.text() };
         }
-        if (!pageRes || pageRes.status !== 200 || !pageRes.data) {
-            throw new Error(`HTTP error ${pageRes?.status || 'unknown'}`);
+
+        if (!pageRes || (pageRes.status !== 200 && pageRes.status !== 304) || !pageRes.data) {
+            throw new Error(`HTTP error ${pageRes?.status || 'unknown'}${pageRes?.error ? ' : ' + pageRes.error : ''}`);
         }
 
         onProgress('Plugin', 'Extraction du contenu...', 40);
