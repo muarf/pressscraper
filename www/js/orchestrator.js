@@ -344,38 +344,8 @@
             throw new Error('Aucun fournisseur activé. Vérifiez vos paramètres.');
         }
 
-        // ── BnF session pre-check ──
-        // If cookies are locally valid, verify they're still alive server-side
-        // so both europresse and bnf-proxy start with a fresh session.
-        if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.BnfLogin?.httpRequest) {
-            const bnfConnector = global.BnfConnector;
-            if (bnfConnector && bnfConnector.isReady(state)) {
-                try {
-                    const cookieH = (bnfConnector.getAuthHeaders(state) || {})['Cookie'] || '';
-                    const checkRes = await window.Capacitor.Plugins.BnfLogin.httpRequest({
-                        url: 'https://nouveau-europresse-com.bnf.idm.oclc.org/Search/Reading',
-                        method: 'GET',
-                        headers: { 'Cookie': cookieH, 'User-Agent': UA }
-                    });
-                    const hasToken = checkRes.data && checkRes.data.includes('__RequestVerificationToken');
-                    if (!hasToken) {
-                        console.log('[ORCH] BnF session expired server-side, refreshing...');
-                        const refreshed = await bnfConnector.refresh(state);
-                        if (refreshed) Object.assign(state, refreshed);
-                    }
-                } catch (checkErr) {
-                    console.warn('[ORCH] BnF session check failed, refreshing:', checkErr.message);
-                    try {
-                        const refreshed = await bnfConnector.refresh(state);
-                        if (refreshed) Object.assign(state, refreshed);
-                    } catch (refreshErr) {
-                        console.warn('[ORCH] BnF session refresh failed:', refreshErr.message);
-                    }
-                }
-            }
-        }
-
         let lastError = null;
+        let bnfSessionChecked = false;
 
         for (const pair of pairs) {
             const { id, name, connector, service } = pair;
@@ -385,6 +355,39 @@
             if (connector && !connector.isReady(state)) {
                 console.log(`[ORCH] Connector ${connector.id} not ready, skipping`);
                 continue;
+            }
+
+            // ── Lazy BnF session check ──
+            if ((service.id === 'europresse' || service.id === 'bnf-proxy') && !bnfSessionChecked) {
+                bnfSessionChecked = true;
+                if (typeof window.Capacitor !== 'undefined' && window.Capacitor.Plugins?.BnfLogin?.httpRequest) {
+                    const bnfConnector = global.BnfConnector;
+                    if (bnfConnector && bnfConnector.isReady(state)) {
+                        try {
+                            console.log('[ORCH] Checking BnF session before use...');
+                            const cookieH = (bnfConnector.getAuthHeaders(state) || {})['Cookie'] || '';
+                            const checkRes = await window.Capacitor.Plugins.BnfLogin.httpRequest({
+                                url: 'https://nouveau-europresse-com.bnf.idm.oclc.org/Search/Reading',
+                                method: 'GET',
+                                headers: { 'Cookie': cookieH, 'User-Agent': UA }
+                            });
+                            const hasToken = checkRes.data && checkRes.data.includes('__RequestVerificationToken');
+                            if (!hasToken) {
+                                console.log('[ORCH] BnF session expired server-side, refreshing...');
+                                const refreshed = await bnfConnector.refresh(state);
+                                if (refreshed) Object.assign(state, refreshed);
+                            }
+                        } catch (checkErr) {
+                            console.warn('[ORCH] BnF session check failed, refreshing:', checkErr.message);
+                            try {
+                                const refreshed = await bnfConnector.refresh(state);
+                                if (refreshed) Object.assign(state, refreshed);
+                            } catch (refreshErr) {
+                                console.warn('[ORCH] BnF session refresh failed:', refreshErr.message);
+                            }
+                        }
+                    }
+                }
             }
 
             // ── Get auth headers from connector ──

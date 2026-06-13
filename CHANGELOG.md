@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.1.9] - 2026-06-13
+- **Optimisation de l'Orchestrateur** : Le contrôle de session BnF est désormais différé (lazy check) pour s'exécuter uniquement si le scraper doit utiliser les sources BnF/Europresse. Cela évite les requêtes BnF inutiles et accélère le scraping via BPC/PressReader/Cafeyn.
+
 ## [1.1.8] - 2026-06-13
 - **Contournement DataDome** : Implémentation d'une méthode de téléchargement via WebView invisible (off-screen) pour contourner la protection anti-bot de *L'Usine Nouvelle* et d'autres publications protégées.
 
