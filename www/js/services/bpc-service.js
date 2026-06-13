@@ -513,6 +513,20 @@
         }
 
 
+        // Piste 1 : Détection explicite des challenges de sécurité (DataDome, Cloudflare, etc.)
+        const pageTitle = (iframeDocument.title || '').toLowerCase();
+        const isChallenge = pageTitle.includes('client-challenge') || 
+                            pageTitle.includes('captcha') || 
+                            pageTitle.includes('challenge') ||
+                            pageTitle.includes('datadome') ||
+                            pageTitle.includes('cloudflare') ||
+                            iframeDocument.body.innerHTML.includes('dd-client-challenge') ||
+                            iframeDocument.body.innerHTML.includes('sec-cpt');
+        if (isChallenge) {
+            iframe.remove();
+            throw new Error('Challenge de sécurité détecté (DataDome/Cloudflare)');
+        }
+
         onProgress('Plugin', 'Récupération du contenu...', 60);
 
         const startTime = Date.now();
@@ -576,9 +590,11 @@
         const hasPaywall = iframeDocument.querySelector(paywallSelector);
         const textLength = contentEl ? contentEl.textContent.trim().length : 0;
 
-        if (hasPaywall && textLength < 800) {
+        // Piste 2 : Rejet si paywall détecté OU si le contenu extrait est trop court et non structuré
+        const hasStructuredArticle = iframeDocument.querySelector('article, [itemprop="articleBody"], .article-body, .article');
+        if ((hasPaywall && textLength < 800) || (textLength < 800 && !hasStructuredArticle)) {
             iframe.remove();
-            throw new Error('Contenu protégé non accessible');
+            throw new Error('Contenu protégé ou insuffisant non accessible');
         }
 
         const pageTitle = iframeDocument.querySelector('meta[property="og:title"]')?.getAttribute('content')

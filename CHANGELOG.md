@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.1.10] - 2026-06-13
+- **Amélioration du Filtrage BPC** : Détection instantanée des pages de challenge anti-bot (DataDome/Cloudflare) pour éviter les attentes inutiles de timeout (8s).
+- **Validation du Contenu BPC** : Rejet automatique des pages de paywall ou de challenges mal détectées n'ayant pas de structure d'article valide et présentant moins de 800 caractères de texte.
+
 ## [1.1.9] - 2026-06-13
 - **Optimisation de l'Orchestrateur** : Le contrôle de session BnF est désormais différé (lazy check) pour s'exécuter uniquement si le scraper doit utiliser les sources BnF/Europresse. Cela évite les requêtes BnF inutiles et accélère le scraping via BPC/PressReader/Cafeyn.
 
