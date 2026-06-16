@@ -533,58 +533,25 @@
         const checkInterval = 100;
         const maxWaitTime = 8000;
 
-        let contentSelector = '';
-        if (articleDomain.includes('lemonde.fr')) contentSelector = '.article__content';
-        else if (articleDomain.includes('lefigaro.fr')) contentSelector = 'div[data-component="fig-content-body"]';
-        else if (articleDomain.includes('leparisien.fr')) contentSelector = 'section#left';
-        else if (articleDomain.includes('liberation.fr')) contentSelector = '.article-body, .article__content';
-        else if (articleDomain.includes('lepoint.fr')) contentSelector = '.article-content, .article-body';
-        else if (articleDomain.includes('marianne.net')) contentSelector = '.article-body';
-        else if (articleDomain.includes('mediapart.fr')) contentSelector = '.content-article';
-        else if (articleDomain.includes('la-croix.com')) contentSelector = '.article-body';
-        else if (articleDomain.includes('lesoir.be')) contentSelector = '.r-content, article.r-article';
-        else if (articleDomain.includes('lamontagne.fr') || articleDomain.includes('lepopulaire.fr') || articleDomain.includes('larep.fr') || articleDomain.includes('le-pays.fr')) contentSelector = 'div#content section > div.flex-col';
-        else if (articleDomain.includes('letemps.ch')) contentSelector = 'div#article-body-wrapper';
-        else if (articleDomain.includes('courrierinternational.com')) contentSelector = 'div.article-text';
-
-        const paywallSelector = 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget, meta[name="premium"][content="true"], div.post-subscribe, div.post__content--faded';
+        const paywallSelector = global.SITE_CONFIG ? global.SITE_CONFIG.paywallSelector : 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget, meta[name="premium"][content="true"], div.post-subscribe, div.post__content--faded';
 
         await new Promise((resolve) => {
             const timer = setInterval(() => {
                 const elapsed = Date.now() - startTime;
                 let bypassSuccess = false;
-                let contentEl = null;
-                if (contentSelector) contentEl = iframeDocument.querySelector(contentSelector);
-                if (!contentEl) contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article');
+                let contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article');
                 const hasPaywall = iframeDocument.querySelector(paywallSelector);
                 const textLength = contentEl ? contentEl.textContent.trim().length : 0;
-                
-                // Track pending BPC async request count (e.g. getExtFetch from Courrier International)
                 const pendingAsync = iframeWindow.pendingAsyncRequests || 0;
-
-                if (articleDomain === 'lemonde.fr') {
-                    const hasParagraphs = iframeDocument.querySelectorAll('.article__paragraph').length >= 3;
-                    const paywallGone = !iframeDocument.querySelector('section.lmd-paywall');
-                    if (hasParagraphs && paywallGone) bypassSuccess = true;
-                } else if (articleDomain === 'lefigaro.fr') {
-                    const hasParagraphs = iframeDocument.querySelectorAll('.fig-paragraph').length >= 3;
-                    const paywallGone = !iframeDocument.querySelector('div#fig-premium-paywall');
-                    if (hasParagraphs && paywallGone) bypassSuccess = true;
-                } else if (articleDomain === 'leparisien.fr') {
-                    const leftSection = iframeDocument.querySelector('section#left');
-                    const paywallGone = !iframeDocument.querySelector('div.paywall');
-                    if (leftSection && leftSection.textContent.length > 800 && paywallGone) bypassSuccess = true;
-                } else {
-                    if (!hasPaywall && textLength > 800 && pendingAsync === 0) bypassSuccess = true;
-                }
+                if (!hasPaywall && textLength > 800 && pendingAsync === 0) bypassSuccess = true;
                 if (bypassSuccess || elapsed >= maxWaitTime) { clearInterval(timer); resolve(); }
             }, checkInterval);
         });
 
         onProgress('Plugin', 'Extraction du texte...', 80);
 
-        let contentEl = null;
-        if (contentSelector) contentEl = iframeDocument.querySelector(contentSelector);
+        let contentSelector = global.SITE_CONFIG && global.SITE_CONFIG.contentSelectorOverrides ? global.SITE_CONFIG.contentSelectorOverrides[articleDomain] : null;
+        let contentEl = contentSelector ? iframeDocument.querySelector(contentSelector) : null;
         if (!contentEl) contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article') || iframeDocument.body;
 
         const hasPaywall = iframeDocument.querySelector(paywallSelector);
@@ -597,11 +564,11 @@
             throw new Error('Contenu protégé ou insuffisant non accessible');
         }
 
-        const pageTitle = iframeDocument.querySelector('meta[property="og:title"]')?.getAttribute('content')
+        const articleTitle = iframeDocument.querySelector('meta[property="og:title"]')?.getAttribute('content')
             || iframeDocument.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
             || iframeDocument.title || 'Article direct';
         const sourceName = siteConfig.name.split(' (')[0].split(' (+')[0];
-        const finalHtml = `<style>${window.PRINT_CSS}</style><h1>${pageTitle}</h1>${contentEl.innerHTML}`;
+        const finalHtml = `<style>${window.PRINT_CSS}</style><h1>${articleTitle}</h1>${contentEl.innerHTML}`;
 
         iframe.remove();
 

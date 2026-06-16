@@ -26,25 +26,7 @@
     `;
 
     // ===== BnF PROXY CONFIG =====
-    // Correspondances : domaine original → sous-domaine EZProxy BnF
-    const BNF_PROXY_SITES = [
-        {
-            // Mediapart
-            domains: ['mediapart.fr', 'www.mediapart.fr'],
-            proxyHost: 'www-mediapart-fr.bnf.idm.oclc.org',
-            name: 'Mediapart',
-            contentSelector: '.paywall-restricted-content, .news__body__center__article, .content-article, .article__content, [data-module="article-body"], .article-body',
-            paywallSelector: '#paywall, .paywall, .register-wall, .subscribe'
-        },
-        {
-            // Arrêt sur Images
-            domains: ['arretsurimages.net', 'www.arretsurimages.net'],
-            proxyHost: 'www-arretsurimages-net.bnf.idm.oclc.org',
-            name: 'Arrêt sur Images',
-            contentSelector: '.page-content, .article-content, .entry-content, .post-content, article .content, [class*="article-body"]',
-            paywallSelector: '.paywall-block.paywall-callToAction, .paywall, #paywall, .subscribe-wall'
-        }
-    ];
+    var BNF_PROXY_SITES = global.SITE_CONFIG ? global.SITE_CONFIG.bnfProxySites : [];
 
     /**
      * Retourne la config BnF proxy si l'URL correspond à un site supporté,
