@@ -5,8 +5,10 @@
 
     function processTitleToQuery(title) {
         if (!title) return null;
-        let cleanTitle = title;
-        const parts = title.split(/ - | \| | — | · /);
+        let cleanTitle = title.replace(/[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g, ' ')
+                              .replace(/œ/g, 'oe').replace(/Œ/g, 'oe')
+                              .replace(/æ/g, 'ae').replace(/Æ/g, 'ae');
+        const parts = cleanTitle.split(/ - | \| | — | · /);
         if (parts.length > 1) {
             const sectionPrefixes = ['en direct', 'vidéo', 'video', 'info', 'info ', 'replay', 'exclusif', 'live', 'en images', 'podcast', 'diaporama'];
             const firstWord = parts[0].toLowerCase().trim();

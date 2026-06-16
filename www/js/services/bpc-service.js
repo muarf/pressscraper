@@ -514,14 +514,15 @@
 
 
         // Piste 1 : Détection explicite des challenges de sécurité (DataDome, Cloudflare, etc.)
-        const pageTitle = (iframeDocument.title || '').toLowerCase();
-        const isChallenge = pageTitle.includes('client-challenge') || 
-                            pageTitle.includes('captcha') || 
-                            pageTitle.includes('challenge') ||
-                            pageTitle.includes('datadome') ||
-                            pageTitle.includes('cloudflare') ||
-                            iframeDocument.body.innerHTML.includes('dd-client-challenge') ||
-                            iframeDocument.body.innerHTML.includes('sec-cpt');
+        const pageTitleLower = (iframeDocument.title || '').toLowerCase();
+        const bodyHtml = iframeDocument.body ? iframeDocument.body.innerHTML : '';
+        const isChallenge = pageTitleLower.includes('client-challenge') || 
+                            pageTitleLower.includes('captcha') || 
+                            pageTitleLower.includes('challenge') ||
+                            pageTitleLower.includes('datadome') ||
+                            pageTitleLower.includes('cloudflare') ||
+                            bodyHtml.includes('dd-client-challenge') ||
+                            bodyHtml.includes('sec-cpt');
         if (isChallenge) {
             iframe.remove();
             throw new Error('Challenge de sécurité détecté (DataDome/Cloudflare)');
@@ -597,17 +598,17 @@
             throw new Error('Contenu protégé ou insuffisant non accessible');
         }
 
-        const pageTitle = iframeDocument.querySelector('meta[property="og:title"]')?.getAttribute('content')
+        const bpcPageTitle = iframeDocument.querySelector('meta[property="og:title"]')?.getAttribute('content')
             || iframeDocument.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
             || iframeDocument.title || 'Article direct';
         const sourceName = siteConfig.name.split(' (')[0].split(' (+')[0];
-        const finalHtml = `<style>${window.PRINT_CSS}</style><h1>${pageTitle}</h1>${contentEl.innerHTML}`;
+        const finalHtml = `<style>${window.PRINT_CSS}</style><h1>${bpcPageTitle}</h1>${contentEl.innerHTML}`;
 
         iframe.remove();
 
         return {
             html: finalHtml,
-            title: pageTitle,
+            title: bpcPageTitle,
             source: sourceName,
             url: articleUrl,
             publishedDate: iframeDocument.querySelector('meta[property="article:published_time"]')?.getAttribute('content') || iframeDocument.querySelector('meta[name="publication_date"]')?.getAttribute('content') || '',
