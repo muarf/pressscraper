@@ -759,24 +759,6 @@
                 if (Date.now() - startTime > MAX_SCRAPE_DURATION_MS) {
                     throw new Error('Délai de récupération dépassé (120s)');
                 }
-                // Renouvellement automatique de session si expirée localement
-                if (!areCookiesValid() && state.bnfUsername && state.bnfPassword) {
-                    titleEl.textContent = 'Renouvellement de la session BnF...';
-                    fill.style.width = '8%';
-                    try {
-                        const result = await nativeLogin(state.bnfUsername, state.bnfPassword);
-                        if (result.success && result.cookies) {
-                            state.bnfCookies = result.cookies;
-                            state.bnfCookiesHeader = result.cookieHeader || '';
-                            state.bnfCookiesExpiry = Date.now() + (2 * 60 * 60 * 1000);
-                            save();
-                        } else {
-                            throw new Error(result.error || 'Reconnexion BnF échouée');
-                        }
-                    } catch(e) {
-                        throw new Error('Session BnF invalide: ' + e.message + '. Reconnectez-vous dans Paramètres.');
-                    }
-                }
                 updateCookieStatusUI();
 
                 try {

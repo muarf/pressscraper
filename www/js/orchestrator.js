@@ -17,8 +17,10 @@
 
     function processTitleToQuery(title) {
         if (!title) return null;
-        let cleanTitle = title;
-        const parts = title.split(/ - | \| | — | · /);
+        let cleanTitle = title.replace(/[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g, ' ')
+                              .replace(/œ/g, 'oe').replace(/Œ/g, 'oe')
+                              .replace(/æ/g, 'ae').replace(/Æ/g, 'ae');
+        const parts = cleanTitle.split(/ - | \| | — | · /);
         if (parts.length > 1) {
             const sectionPrefixes = ['en direct', 'vidéo', 'video', 'info', 'info ', 'replay', 'exclusif', 'live', 'en images', 'podcast', 'diaporama'];
             const firstWord = parts[0].toLowerCase().trim();
@@ -79,8 +81,11 @@
     function processDescriptionToQuery(description) {
         if (!description) return null;
 
+        let cleanDesc = description.replace(/[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g, ' ')
+                                   .replace(/œ/g, 'oe').replace(/Œ/g, 'oe')
+                                   .replace(/æ/g, 'ae').replace(/Æ/g, 'ae');
         // Remplacer les apostrophes par des espaces plutôt que de les supprimer directement
-        let cleanDesc = description.replace(/[''""’‘`]/g, ' ');
+        cleanDesc = cleanDesc.replace(/[''""’‘`]/g, ' ');
         cleanDesc = cleanDesc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()…?–—«»]/g, ' ');
 
         const words = cleanDesc.toLowerCase().split(/\s+/).filter(Boolean);
@@ -136,6 +141,16 @@
     let cachedIsUrl = false;
 
 
+    function isChallengeTitle(title) {
+        if (!title) return false;
+        const lower = title.toLowerCase().trim();
+        return lower.includes('client challenge') ||
+               lower.includes('captcha') ||
+               lower.includes('challenge') ||
+               lower.includes('datadome') ||
+               lower.includes('cloudflare');
+    }
+
     async function extractTitleFromUrl(url, fallbackTitle, state, onProgress) {
         if (cachedTitle !== null && cachedIsUrl === url.startsWith('http')) {
             return { title: cachedTitle, date: cachedDate, description: cachedDescription };
@@ -153,18 +168,57 @@
         let articleTitle = fallbackTitle || '';
         let publishedDate = '';
         let articleDescription = '';
+        let htmlData = '';
+        let useFallback = false;
 
         try {
             const UA = await getUA();
-            const BnfLogin = window.Capacitor.Plugins.BnfLogin;
-            const pageRes = await BnfLogin.httpRequest({
-                url, method: 'GET',
-                headers: { 'User-Agent': UA }
-            });
-            if (pageRes.status === 200 && pageRes.data) {
+            const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
+            let pageRes = null;
+            if (BnfLogin) {
+                pageRes = await BnfLogin.httpRequest({
+                    url, method: 'GET',
+                    headers: { 'User-Agent': UA }
+                });
+            } else {
+                const r = await fetch(url, { headers: { 'User-Agent': UA } });
+                pageRes = { status: r.status, data: await r.text() };
+            }
+
+            if (pageRes && (pageRes.status === 200 || pageRes.status === 304) && pageRes.data) {
+                htmlData = pageRes.data;
                 const parser = new DOMParser();
-                const doc = parser.parseFromString(pageRes.data, 'text/html');
-                if (!articleTitle) {
+                const doc = parser.parseFromString(htmlData, 'text/html');
+                const titleToCheck = doc.title || '';
+                if (isChallengeTitle(titleToCheck)) {
+                    console.log('[ORCH] Title request returned security challenge page, trying WebView fetch...');
+                    useFallback = true;
+                }
+            } else {
+                console.log('[ORCH] Title request failed or returned status:', pageRes?.status);
+                useFallback = true;
+            }
+
+            if (useFallback && BnfLogin && typeof BnfLogin.fetchHtmlViaWebView === 'function') {
+                onProgress('Récupération', 'Contournement protection (WebView)...', 12);
+                try {
+                    const webViewRes = await BnfLogin.fetchHtmlViaWebView({ url, userAgent: UA });
+                    if (webViewRes && webViewRes.data) {
+                        htmlData = webViewRes.data;
+                    }
+                } catch (err) {
+                    console.warn('[ORCH] WebView title fetch failed:', err);
+                }
+            }
+        } catch (e) {
+            console.warn('[ORCH] Failed to fetch original page:', e);
+        }
+
+        if (htmlData) {
+            try {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlData, 'text/html');
+                if (!articleTitle || isChallengeTitle(articleTitle)) {
                     articleTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content')
                         || doc.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
                         || doc.title || '';
@@ -174,13 +228,13 @@
                 articleDescription = doc.querySelector('meta[property="og:description"]')?.getAttribute('content')
                     || doc.querySelector('meta[name="twitter:description"]')?.getAttribute('content')
                     || doc.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+            } catch (err) {
+                console.warn('[ORCH] Error parsing HTML data:', err);
             }
-        } catch (e) {
-            console.warn('[ORCH] Failed to fetch original page:', e);
         }
 
         const knownSiteNames = ['liberation.fr', 'le monde', 'le figaro'];
-        if (!articleTitle || knownSiteNames.includes(articleTitle.toLowerCase().trim())) {
+        if (!articleTitle || knownSiteNames.includes(articleTitle.toLowerCase().trim()) || isChallengeTitle(articleTitle)) {
             try {
                 const urlObj = new URL(url);
                 const pathSegments = urlObj.pathname.split('/').filter(Boolean);
@@ -274,10 +328,26 @@
         return items;
     }
 
-    function findBestMatch(items, originalTitle, titleField = 'title') {
+    function findBestMatch(items, originalTitle, titleField = 'title', targetKeywords = null) {
         let bestMatch = null;
         let maxSim = 0;
         (items || []).forEach(item => {
+            if (targetKeywords && targetKeywords.length > 0) {
+                const pubName = (
+                    item.publication?.name || 
+                    item.publication?.title ||
+                    item.publicationName || 
+                    item.issue?.newspaper?.name || 
+                    item.source || 
+                    item.magazine?.name ||
+                    ''
+                ).toLowerCase();
+                const isCorrectPub = targetKeywords.some(k => pubName.includes(k.toLowerCase()));
+                if (!isCorrectPub) {
+                    console.log(`[ORCH] Rejet de l'article "${item[titleField] || 'Sans titre'}" provenant de "${pubName || 'Inconnu'}" (ne correspond pas aux mots-clés attendus: ${targetKeywords.join(', ')}) | Item:`, JSON.stringify(item));
+                    return;
+                }
+            }
             const itemTitle = item[titleField] || '';
             if (itemTitle) {
                 const sim = calculateSimilarity(originalTitle, itemTitle);
@@ -297,6 +367,7 @@
         cachedTitle = null;
         cachedDate = null;
         const isUrl = titleOrUrl.startsWith('http');
+        const targetKeywords = isUrl && global.PublicationMapping ? global.PublicationMapping.getKeywordsForUrl(titleOrUrl) : null;
         const UA = await getUA();
 
         // Build prioritized list of (connector, service) pairs from registry
@@ -312,12 +383,46 @@
             'bnf-proxy': 'bnf-proxy'
         };
 
+        const isBpcRequested = providerOrder.includes('bpc') && providerEnabled['bpc'] !== false;
+        let bpcSkipped = false;
+        if (isBpcRequested) {
+            const hasBpcRules = !!localStorage.getItem('bpc_sites_js');
+            const hasBpcService = !!global.BpcService;
+            if (!hasBpcRules || !hasBpcService) {
+                const download = confirm("Le plugin de lecture (BPC) n'est pas installé ou mis à jour.\n\nSouhaitez-vous le télécharger maintenant ?\n\n(Cliquez sur Annuler pour continuer temporairement sans BPC)");
+                if (download) {
+                    onProgress('Plugin', 'Téléchargement du plugin BPC...', 5);
+                    try {
+                        if (typeof window.updateBpcRules === 'function') {
+                            await window.updateBpcRules();
+                        } else {
+                            throw new Error("Fonction de téléchargement non disponible.");
+                        }
+                    } catch (err) {
+                        console.error('[ORCH] Error downloading BPC rules:', err);
+                        alert("Échec du téléchargement du plugin : " + err.message + "\nLe plugin BPC sera ignoré pour cette tentative.");
+                        bpcSkipped = true;
+                    }
+                } else {
+                    bpcSkipped = true;
+                }
+            }
+        }
+
         const pairs = providerOrder
             .filter(k => providerEnabled[k] !== false)
             .map(k => idMap[k])
             .filter(Boolean)
             .map(id => global.Registry.getPair(id))
-            .filter(Boolean);
+            .filter(Boolean)
+            .filter(p => {
+                if (p.id === 'bpc') {
+                    if (bpcSkipped || !p.service || !localStorage.getItem('bpc_sites_js')) {
+                        return false;
+                    }
+                }
+                return true;
+            });
 
         // Inject bnf-proxy dynamically if BnF is enabled and URL matches Mediapart/ASI
         if (isUrl && providerEnabled['bnf'] !== false) {
@@ -468,7 +573,7 @@
                         let bestMatch = null;
                         let maxSim = 0;
                         if (isUrl && items && items.length > 0) {
-                            const match = findBestMatch(items, extractedTitle);
+                            const match = findBestMatch(items, extractedTitle, 'title', targetKeywords);
                             bestMatch = match.bestMatch;
                             maxSim = match.maxSim;
                         }
@@ -484,7 +589,7 @@
                                     descQuery
                                 );
                                 if (descItems && descItems.length > 0) {
-                                    const descMatch = findBestMatch(descItems, extractedTitle);
+                                    const descMatch = findBestMatch(descItems, extractedTitle, 'title', targetKeywords);
                                     if (descMatch.maxSim >= maxSim) {
                                         bestMatch = descMatch.bestMatch;
                                         maxSim = descMatch.maxSim;
@@ -595,7 +700,7 @@
                         let bestMatch = null;
                         let maxSim = 0;
                         if (isUrl && searchRes && searchRes.length > 0) {
-                            const match = findBestMatch(searchRes, extractedTitle);
+                            const match = findBestMatch(searchRes, extractedTitle, 'title', targetKeywords);
                             bestMatch = match.bestMatch;
                             maxSim = match.maxSim;
                         }
@@ -611,7 +716,7 @@
                                     descQuery
                                 );
                                 if (descRes && descRes.length > 0) {
-                                    const descMatch = findBestMatch(descRes, extractedTitle);
+                                    const descMatch = findBestMatch(descRes, extractedTitle, 'title', targetKeywords);
                                     if (descMatch.maxSim >= maxSim) {
                                         bestMatch = descMatch.bestMatch;
                                         maxSim = descMatch.maxSim;
@@ -665,14 +770,17 @@
                     if (global.Scraper) global.Scraper.lastQuery = query;
 
                     onProgress('BnF Europresse', `Recherche: "${query.substring(0, 40)}..."`, 25);
-                    let results = await service.search(query, authHeaders, onProgress);
+                    let results = await retrySearch(
+                        (q) => service.search(q, authHeaders, onProgress),
+                        query
+                    );
 
                     let matchedByDescription = false;
                     let bestMatch = null;
                     let maxSim = 0;
                     if (isUrl) {
                         if (results && results.length > 0) {
-                            const match = findBestMatch(results, extractedTitle);
+                            const match = findBestMatch(results, extractedTitle, 'title', targetKeywords);
                             bestMatch = match.bestMatch;
                             maxSim = match.maxSim;
                         }
@@ -682,9 +790,12 @@
                             if (descQuery) {
                                 console.log('[ORCH] Retrying search with description strategy on Europresse...', descQuery);
                                 onProgress('BnF Europresse', 'Recherche par description...', 68);
-                                results = await service.search(descQuery, authHeaders, onProgress);
+                                results = await retrySearch(
+                                    (q) => service.search(q, authHeaders, onProgress),
+                                    descQuery
+                                );
                                 if (results && results.length > 0) {
-                                    const descMatch = findBestMatch(results, extractedTitle);
+                                    const descMatch = findBestMatch(results, extractedTitle, 'title', targetKeywords);
                                     if (descMatch.maxSim >= maxSim) {
                                         bestMatch = descMatch.bestMatch;
                                         maxSim = descMatch.maxSim;

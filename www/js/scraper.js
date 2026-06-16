@@ -393,7 +393,10 @@
     function processTitleToQuery(title) {
         if (!title) return null;
 
-        let cleanTitle = title.split(/ - | \| | — | · /)[0];
+        const normalizedTitle = title.replace(/[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g, ' ')
+                                     .replace(/œ/g, 'oe').replace(/Œ/g, 'oe')
+                                     .replace(/æ/g, 'ae').replace(/Æ/g, 'ae');
+        let cleanTitle = normalizedTitle.split(/ - | \| | — | · /)[0];
         // Remplacer les apostrophes par des espaces plutôt que de les supprimer directement
         cleanTitle = cleanTitle.replace(/[''""’‘`]/g, ' ');
         cleanTitle = cleanTitle.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()…?–—«»]/g, ' ');
