@@ -166,28 +166,6 @@
             }
         },
 
-        // ----------------------------------------------------------------
-        // Template for future sites — copy and adapt this block:
-        // ----------------------------------------------------------------
-        // {
-        //     domains: ['example.com', 'www.example.com'],
-        //     script: function(articleUrl, articlePathname, articleOrigin) {
-        //         return `(function() {
-        //     try {
-        //         var articleSel = 'div.article-content';
-        //         var article = document.querySelector(articleSel);
-        //         if (!article) { console.warn('[BPC MOBILE] example.com: selector not found'); return; }
-        //         var apiUrl = 'https://api.example.com/article?path=' + encodeURIComponent(${JSON.stringify('PLACEHOLDER_PATHNAME')});
-        //         getExtFetch(apiUrl, 'data.body', {}, function(url, data) {
-        //             if (!data) return;
-        //             var doc = new DOMParser().parseFromString(DOMPurify.sanitize(data, dompurify_options), 'text/html');
-        //             var articleNew = doc.querySelector(articleSel);
-        //             if (articleNew) article.parentNode.replaceChild(articleNew, article);
-        //         });
-        //     } catch(e) { console.error('[BPC MOBILE] example.com error:', e); }
-        // })();`;
-        //     }
-        // },
     ];
 
     /**
