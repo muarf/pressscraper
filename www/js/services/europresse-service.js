@@ -15,7 +15,7 @@
             const isPrefix = sectionPrefixes.some(p => firstWord === p || firstWord.startsWith(p));
             cleanTitle = isPrefix ? parts.slice(1).join(' - ') : parts[0];
         }
-        cleanTitle = cleanTitle.replace(/[''""'‘`]/g, ' ');
+        cleanTitle = cleanTitle.replace(/[''""'‘’`]/g, ' ');
         cleanTitle = cleanTitle.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()…?–—«»]/g, ' ');
         const words = cleanTitle.toLowerCase().split(/\s+/).filter(Boolean);
         const filtered = [];
@@ -130,6 +130,7 @@
     }
 
     const EuropresseService = {
+        processTitleToQuery,
         id: 'europresse',
         name: 'Europresse',
 
@@ -322,4 +323,4 @@
 
     global.EuropresseService = EuropresseService;
 
-})(window);
+})(typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : this);
