@@ -5,4 +5,5 @@
     <string name="package_name">io.qzz.pressecraper</string>
     <string name="custom_url_scheme">io.qzz.pressecraper</string>
     <string name="process_text_action_label">Enregistrer l\'article</string>
+    <string name="background_poll_channel_id">background_poll</string>
 </resources>

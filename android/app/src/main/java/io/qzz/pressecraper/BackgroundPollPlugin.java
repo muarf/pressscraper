@@ -28,7 +28,6 @@ import java.util.concurrent.Executors;
 @CapacitorPlugin(name = "BackgroundPoll")
 public class BackgroundPollPlugin extends Plugin {
     private static final String TAG = "BackgroundPoll";
-    private static final String CHANNEL_ID = "background_poll";
     private ExecutorService executor;
     private Handler mainHandler;
     private Runnable pollRunnable;
@@ -44,8 +43,9 @@ public class BackgroundPollPlugin extends Plugin {
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            String channelId = getContext().getString(R.string.background_poll_channel_id);
             NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID,
+                channelId,
                 "Article Downloads",
                 NotificationManager.IMPORTANCE_DEFAULT
             );
@@ -187,7 +187,8 @@ public class BackgroundPollPlugin extends Plugin {
 
         Notification.Builder builder;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            builder = new Notification.Builder(ctx, CHANNEL_ID);
+            String channelId = ctx.getString(R.string.background_poll_channel_id);
+            builder = new Notification.Builder(ctx, channelId);
         } else {
             builder = new Notification.Builder(ctx);
         }
