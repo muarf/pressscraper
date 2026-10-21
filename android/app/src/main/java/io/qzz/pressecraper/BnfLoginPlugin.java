@@ -1133,10 +1133,11 @@ public class BnfLoginPlugin extends Plugin {
         }
 
         try {
+            java.io.File updatesDir = new java.io.File(getContext().getCacheDir(), "updates");
             java.io.File apkFile = new java.io.File(filePath);
-            if (!apkFile.exists()) {
+            if (!apkFile.exists() || !apkFile.getCanonicalPath().startsWith(updatesDir.getCanonicalPath()) || !apkFile.getName().endsWith(".apk")) {
                 JSObject result = new JSObject();
-                result.put("error", "Fichier APK introuvable");
+                result.put("error", "Fichier APK invalide ou introuvable");
                 call.resolve(result);
                 return;
             }
