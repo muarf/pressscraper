@@ -1033,19 +1033,12 @@
                 let bestMatch = null;
                 let maxSim = 0;
 
-                const pagePromises = [];
                 for (let page = 0; page < 2; page++) {
-                    pagePromises.push(BnfLogin.httpRequest({
+                    const listRes = await BnfLogin.httpRequest({
                         url: `https://${EUROPRESSE_DOMAIN}/Search/GetPage?pageNo=${page}&docPerPage=50`,
                         method: 'GET',
                         headers: { 'Cookie': cookieHeader, 'User-Agent': UA }
-                    }));
-                }
-
-                const listResults = await Promise.all(pagePromises);
-
-                for (let page = 0; page < 2; page++) {
-                    const listRes = listResults[page];
+                    });
 
                     if (!listRes.data || !listRes.data.trim()) break;
 
