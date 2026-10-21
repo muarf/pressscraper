@@ -6,7 +6,6 @@ Based on TEST_PLAN.md section 1.5 BnF Proxy
 import subprocess
 import sys
 import os
-import json
 import time
 
 def test_redroid_connection():
