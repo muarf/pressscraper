@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "cap:copy": "npx cap copy android",
     "cap:run": "npx cap run android",
     "cap:build": "npx cap copy android && npx cap build android"
@@ -21,5 +21,9 @@
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/share": "^8.0.1",
     "dompurify": "^3.4.5"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2",
+    "jest-environment-jsdom": "^30.5.2"
   }
 }

@@ -42,10 +42,10 @@
 
     init().catch(e => console.error('[BPC] Auto-init failed:', e));
 
-    function findSiteConfig(hostname) {
-        if (!bpcSites) return null;
-        for (const key in bpcSites) {
-            const site = bpcSites[key];
+    function findRuleForHost(hostname, sites) {
+        if (!sites) return null;
+        for (const key in sites) {
+            const site = sites[key];
             if (!site || (!site.domain && !site.group)) continue;
             if (site.domain && (hostname === site.domain || hostname.endsWith('.' + site.domain))) {
                 return { name: key, ...site };
@@ -59,6 +59,10 @@
             }
         }
         return null;
+    }
+
+    function findSiteConfig(hostname) {
+        return findRuleForHost(hostname, bpcSites);
     }
 
     const BpcService = {
@@ -612,5 +616,9 @@
     }
 
     global.BpcService = BpcService;
+
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = { findRuleForHost };
+    }
 
 })(window);
