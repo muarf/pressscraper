@@ -29,7 +29,6 @@ import subprocess
 import sys
 import time
 import traceback
-from urllib.parse import urljoin
 
 import requests
 import websocket
