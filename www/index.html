@@ -297,6 +297,7 @@
                 <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
                 <div class="action-row" id="actionRow" style="display:none;">
                     <button class="action-btn primary" id="openArticleBtn" onclick="openArticle()" style="display:none;"><i class="fas fa-eye"></i> Ouvrir l'article</button>
+                    <button class="action-btn secondary" id="reportIssueBtn" onclick="reportCurrentArticleIssue()" style="display:none;"><i class="fas fa-flag"></i> Signaler</button>
                     <button class="action-btn secondary" id="reportErrorBtn" onclick="reportCurrentScrapeError()" style="display:none;"><i class="fas fa-flag"></i> Signaler l'erreur</button>
                 </div>
             </div>
@@ -503,6 +504,7 @@
             <div class="article-header">
                 <button class="back-btn" onclick="closeArticle()"><i class="fas fa-arrow-left"></i></button>
                 <span class="article-title" id="viewerArticleTitle"></span>
+                <button class="report-btn" id="viewerReportBtn" onclick="reportViewerArticleIssue()" title="Signaler un problème sur cet article"><i class="fas fa-flag"></i></button>
                 <button class="copy-btn" onclick="copyArticleText()" title="Copier le texte"><i class="fas fa-copy"></i></button>
                 <button class="share-btn" onclick="shareArticle()" title="Partager l'article"><i class="fas fa-share-alt"></i></button>
                 <button class="delete-btn" onclick="confirmDeleteArticle()" title="Supprimer l'article"><i class="fas fa-trash"></i></button>

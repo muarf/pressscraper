@@ -578,6 +578,15 @@
             throw new Error('Contenu protégé ou insuffisant non accessible');
         }
 
+        // Nettoyage des éléments parasites configurés pour ce média (partage, fils d'ariane, bandeaux)
+        if (siteRule?.removeSelector && contentEl) {
+            try {
+                contentEl.querySelectorAll(siteRule.removeSelector).forEach(el => el.remove());
+            } catch (cleanErr) {
+                console.warn('[BPC] Failed to apply removeSelector:', cleanErr);
+            }
+        }
+
         const bpcPageTitle = iframeDocument.querySelector('meta[property="og:title"]')?.getAttribute('content')
             || iframeDocument.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
             || iframeDocument.title || 'Article direct';

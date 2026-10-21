@@ -750,6 +750,8 @@
         openBtn.style.display = 'none';
         const reportBtn = document.getElementById('reportErrorBtn');
         if (reportBtn) reportBtn.style.display = 'none';
+        const issueBtn = document.getElementById('reportIssueBtn');
+        if (issueBtn) issueBtn.style.display = 'none';
         window._lastScrapeAttempt = { url: targetUrlOrQuery, fallbackTitle };
 
         let sessionRetry = false;
@@ -823,6 +825,12 @@
                     state.currentArticleId = articleId;
                     actions.style.display = 'flex';
                     openBtn.style.display = 'flex';
+                    const issueBtn = document.getElementById('reportIssueBtn');
+                    if (issueBtn) {
+                        issueBtn.style.display = 'inline-flex';
+                        issueBtn.disabled = false;
+                        issueBtn.innerHTML = '<i class="fas fa-flag"></i> Signaler';
+                    }
 
                     resetScrapeBtn();
                     toast('✅ Article sauvegardé localement !', 'success');
@@ -935,6 +943,90 @@
         }
     };
 
+    window.reportCurrentArticleIssue = async function() {
+        const attempt = window._lastScrapeAttempt || {};
+        let url = attempt.url || '';
+        if (!url && state.currentArticleId) {
+            const art = await window.DB.getArticleFromDb(state.currentArticleId);
+            url = art?.url || '';
+        }
+        if (!url) {
+            url = document.getElementById('urlInput')?.value || '';
+        }
+
+        const reason = prompt(
+            "Signaler un problème sur cet article (mise en page dégradée, texte manquant, etc.) :",
+            "Mise en page dégradée ou incomplète"
+        );
+        if (reason === null) return;
+
+        const btn = document.getElementById('reportIssueBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
+        }
+
+        try {
+            let domain = '';
+            try { domain = new URL(url).hostname; } catch(_) { domain = url; }
+            if (window.FeedbackService) {
+                await window.FeedbackService.reportSiteError({
+                    url: url,
+                    domain: domain,
+                    reason: reason.trim() || 'Mise en page dégradée ou incomplète'
+                });
+                toast('Signalement envoyé aux développeurs !', 'success');
+            }
+            if (btn) btn.innerHTML = '<i class="fas fa-check"></i> Signalé !';
+        } catch(e) {
+            console.error('[Feedback] Report issue failed:', e);
+            toast('Échec du signalement : ' + e.message, 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-flag"></i> Signaler';
+            }
+        }
+    };
+
+    window.reportViewerArticleIssue = async function() {
+        if (!state.currentArticleId) return;
+        const article = await window.DB.getArticleFromDb(state.currentArticleId);
+        if (!article) return;
+
+        const reason = prompt(
+            "Signaler un problème sur cet article (mise en page dégradée, texte manquant, etc.) :",
+            "Mise en page dégradée ou incomplète"
+        );
+        if (reason === null) return;
+
+        const btn = document.getElementById('viewerReportBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        }
+
+        try {
+            let domain = '';
+            try { domain = new URL(article.url).hostname; } catch(_) { domain = article.source || ''; }
+            if (window.FeedbackService) {
+                await window.FeedbackService.reportSiteError({
+                    url: article.url,
+                    domain: domain,
+                    reason: reason.trim() || 'Mise en page dégradée ou incomplète'
+                });
+                toast('Signalement envoyé aux développeurs !', 'success');
+            }
+            if (btn) btn.innerHTML = '<i class="fas fa-check"></i>';
+        } catch(e) {
+            console.error('[Feedback] Viewer report failed:', e);
+            toast('Échec du signalement : ' + e.message, 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-flag"></i>';
+            }
+        }
+    };
+
     // ===== VISIONNEUSE D'ARTICLE =====
     window.openArticle = async function() {
         if (!state.currentArticleId) return;
@@ -951,6 +1043,12 @@
             document.getElementById('articleContent').innerHTML = DOMPurify.sanitize(article.html_content || '<p>Contenu indisponible</p>');
             applyFontSize(state.articleFontSize);
             state.currentArticleId = articleId;
+
+            const viewerReportBtn = document.getElementById('viewerReportBtn');
+            if (viewerReportBtn) {
+                viewerReportBtn.disabled = false;
+                viewerReportBtn.innerHTML = '<i class="fas fa-flag"></i>';
+            }
 
             // Métadonnées
             const metaEl = document.getElementById('articleMeta');

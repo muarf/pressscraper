@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 2,
+        version: 3,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -119,6 +119,44 @@
             "lecanardenchaine.fr": {
                 name: "Le Canard enchaîné",
                 contentSelector: "article, .article-content, div[class*='article-body']",
+                removeSelector: ".list-breadcrumb, .share-sticky, .no-xsmall, #share-sticky-pixel-to-watch, [class*='share'], .smaller-font, .sr-only, .visually-hidden",
+                minParagraphs: 3,
+                minTextLength: 1000
+            },
+            "lejdd.fr": {
+                name: "Le Journal du Dimanche",
+                contentSelector: "article, div[class*='article-body'], .article-content, div.article__content",
+                paywallSelector: ".forbidden, div.paywall",
+                removeSelector: ".forbidden, div.premium-hidden, div.p-aside--placeholder, section.outbrain-container",
+                minParagraphs: 3,
+                minTextLength: 1200
+            },
+            "sudouest.fr": {
+                name: "Sud Ouest",
+                aliases: ["charentelibre.fr", "larepubliquedespyrenees.fr"],
+                contentSelector: "article, .article-content, div[class*='article-content'], div.content",
+                removeSelector: ".visible-not-premium, .footer-premium, div.pub, div.ph-easy-subscription",
+                minParagraphs: 3,
+                minTextLength: 1200
+            },
+            "capital.fr": {
+                name: "Capital",
+                contentSelector: "article, div#articleWall, .article-content, div[class*='article-body']",
+                removeSelector: "div#articleWall-wrapper, div.ap-AdContainer",
+                minParagraphs: 3,
+                minTextLength: 1200
+            },
+            "causeur.fr": {
+                name: "Causeur",
+                contentSelector: "article, .entry-content, .article-content, div[class*='article-body']",
+                removeSelector: ".qiota-wrapper, .qiota-container, [id*='qiota']",
+                minParagraphs: 3,
+                minTextLength: 1200
+            },
+            "le1hebdo.fr": {
+                name: "Le 1 Hebdo",
+                contentSelector: "article, .article-content, div[class*='article']",
+                removeSelector: ".qiota-wrapper, .qiota-container, [id*='qiota']",
                 minParagraphs: 3,
                 minTextLength: 1000
             }
@@ -135,7 +173,12 @@
     }
 
     function getRemoteRules() {
-        return safeJsonParse(localStorage.getItem(STORAGE_KEY_REMOTE), null);
+        const cached = safeJsonParse(localStorage.getItem(STORAGE_KEY_REMOTE), null);
+        if (cached && (!cached.version || cached.version < DEFAULT_RULES.version)) {
+            try { localStorage.removeItem(STORAGE_KEY_REMOTE); } catch(_) {}
+            return null;
+        }
+        return cached;
     }
 
     /**
@@ -245,9 +288,14 @@
             }
             const data = await res.json();
             if (data && data.sites && typeof data.sites === 'object') {
-                localStorage.setItem(STORAGE_KEY_REMOTE, JSON.stringify(data));
-                console.log('[SitesRules] Règles distantes mises à jour :', Object.keys(data.sites).length, 'sites.');
-                return true;
+                if (data.version && data.version >= DEFAULT_RULES.version) {
+                    localStorage.setItem(STORAGE_KEY_REMOTE, JSON.stringify(data));
+                    console.log('[SitesRules] Règles distantes mises à jour :', Object.keys(data.sites).length, 'sites (v' + data.version + ').');
+                    return true;
+                } else {
+                    console.log('[SitesRules] Règles distantes (v' + (data.version || 0) + ') inférieures aux règles embarquées (v' + DEFAULT_RULES.version + '), conservation des règles embarquées.');
+                    try { localStorage.removeItem(STORAGE_KEY_REMOTE); } catch(_) {}
+                }
             }
         } catch (e) {
             console.warn('[SitesRules] Erreur de synchronisation distante :', e.message);

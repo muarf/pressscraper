@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
   "sites": {
     "lemonde.fr": {
@@ -100,6 +100,44 @@
     "lecanardenchaine.fr": {
       "name": "Le Canard enchaîné",
       "contentSelector": "article, .article-content, div[class*='article-body']",
+      "removeSelector": ".list-breadcrumb, .share-sticky, .no-xsmall, #share-sticky-pixel-to-watch, [class*='share'], .smaller-font, .sr-only, .visually-hidden",
+      "minParagraphs": 3,
+      "minTextLength": 1000
+    },
+    "lejdd.fr": {
+      "name": "Le Journal du Dimanche",
+      "contentSelector": "article, div[class*='article-body'], .article-content, div.article__content",
+      "paywallSelector": ".forbidden, div.paywall",
+      "removeSelector": ".forbidden, div.premium-hidden, div.p-aside--placeholder, section.outbrain-container",
+      "minParagraphs": 3,
+      "minTextLength": 1200
+    },
+    "sudouest.fr": {
+      "name": "Sud Ouest",
+      "aliases": ["charentelibre.fr", "larepubliquedespyrenees.fr"],
+      "contentSelector": "article, .article-content, div[class*='article-content'], div.content",
+      "removeSelector": ".visible-not-premium, .footer-premium, div.pub, div.ph-easy-subscription",
+      "minParagraphs": 3,
+      "minTextLength": 1200
+    },
+    "capital.fr": {
+      "name": "Capital",
+      "contentSelector": "article, div#articleWall, .article-content, div[class*='article-body']",
+      "removeSelector": "div#articleWall-wrapper, div.ap-AdContainer",
+      "minParagraphs": 3,
+      "minTextLength": 1200
+    },
+    "causeur.fr": {
+      "name": "Causeur",
+      "contentSelector": "article, .entry-content, .article-content, div[class*='article-body']",
+      "removeSelector": ".qiota-wrapper, .qiota-container, [id*='qiota']",
+      "minParagraphs": 3,
+      "minTextLength": 1200
+    },
+    "le1hebdo.fr": {
+      "name": "Le 1 Hebdo",
+      "contentSelector": "article, .article-content, div[class*='article']",
+      "removeSelector": ".qiota-wrapper, .qiota-container, [id*='qiota']",
       "minParagraphs": 3,
       "minTextLength": 1000
     }

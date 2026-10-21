@@ -17,18 +17,18 @@ HEADERS = {
     'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8'
 }
 
-# Sites francophones supportés par BPC à tester
+# Sites francophones supportés par BPC non encore configurés dans PressScraper
 TARGET_SITES = [
-    ("challenges.fr", "https://www.challenges.fr", re.compile(r'_[0-9]{5,}$')),
-    ("alternatives-economiques.fr", "https://www.alternatives-economiques.fr", re.compile(r'_[0-9]{2}-[0-9]{2}-[0-9]{4}$')),
-    ("telerama.fr", "https://www.telerama.fr", re.compile(r'-\d+\.php$')),
-    ("capital.fr", "https://www.capital.fr", re.compile(r'-\d{6,}$')),
-    ("charliehebdo.fr", "https://charliehebdo.fr", re.compile(r'/\d{4}/\d{2}/')),
-    ("sciencesetavenir.fr", "https://www.sciencesetavenir.fr", re.compile(r'_[0-9]{5,}$')),
-    ("parismatch.com", "https://www.parismatch.com", re.compile(r'-\d{6,}$')),
-    ("atlantico.fr", "https://atlantico.fr", re.compile(r'/article/')),
-    ("franc-tireur.fr", "https://www.franc-tireur.fr", re.compile(r'-\d{6,}$')),
-    ("lecanardenchaine.fr", "https://www.lecanardenchaine.fr", re.compile(r'/(dossiers|societe|politique|economie)/'))
+    ("lexpress.fr", "https://www.lexpress.fr", re.compile(r"-[A-Z0-9]{20,}")),
+    ("latribune.fr", "https://www.latribune.fr/economie-2/", re.compile(r"/article/[a-z-]+/\d+/")),
+    ("nouvelobs.com", "https://www.nouvelobs.com", re.compile(r"\.\w+\d+/.*\.html$")),
+    ("telerama.fr", "https://www.telerama.fr", re.compile(r"-\d+\.php$")),
+    ("capital.fr", "https://www.capital.fr", re.compile(r"-\d{6,}$")),
+    ("parismatch.com", "https://www.parismatch.com", re.compile(r"-\d{6,}$")),
+    ("franc-tireur.fr", "https://www.franc-tireur.fr", re.compile(r"^https://www\.franc-tireur\.fr/[a-z0-9-]+$")),
+    ("lejdd.fr", "https://www.lejdd.fr", re.compile(r"-\d{6,}$")),
+    ("sudouest.fr", "https://www.sudouest.fr", re.compile(r"-\d{7,}\.php$")),
+    ("le1hebdo.fr", "https://le1hebdo.fr", re.compile(r"/article/"))
 ]
 
 def find_premium_url(domain, base_url, pattern):
@@ -71,8 +71,8 @@ def run_adb(cmd):
     return subprocess.run(f"adb {cmd}", shell=True, capture_output=True, text=True)
 
 def get_latest_cached_pdf():
-    res = run_adb('shell "run-as io.qzz.pressecraper ls -t /data/user/0/io.qzz.pressecraper/cache/art_*.pdf 2>/dev/null | head -n 1"').stdout.strip()
-    return res if res.endswith('.pdf') else None
+    res = run_adb("shell \"run-as io.qzz.pressecraper sh -c 'ls -t cache/art_*.pdf 2>/dev/null | head -n 1'\"").stdout.strip()
+    return f"/data/user/0/io.qzz.pressecraper/{res}" if (res and res.endswith('.pdf')) else None
 
 def test_article_on_device(url):
     """Envoie l'article à PressScraper via intent et analyse le résultat."""
