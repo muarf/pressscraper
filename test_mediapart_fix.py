@@ -6,8 +6,6 @@ Tests the paywallSelector fix specifically without requiring BnF credentials
 
 import subprocess
 import sys
-import os
-import json
 import time
 
 # Set up ADB path
