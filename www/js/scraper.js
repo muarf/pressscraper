@@ -670,11 +670,11 @@
         }
 
         // ===========================================
-        // === ITÉRATION PAR PRIORITÉ (providerOrder) ===
+        // === EXÉCUTION PARALLÈLE (Promise.any) ===
         // ===========================================
-        for (const provider of activeProviders) {
+        const fetchProvider = async (provider) => {
             if (provider === 'cafeyn') {
-                if (!window.Cafeyn || !window.Cafeyn.isTokenValid()) continue;
+                if (!window.Cafeyn || !window.Cafeyn.isTokenValid()) throw new Error('skip');
                 onProgress('Cafeyn', 'Récupération via Cafeyn...', 10);
                 try {
                     let slug = null;
@@ -706,7 +706,7 @@
                             const { title } = await getExtractedTitleAndDate();
                             if (!title) {
                                 console.warn('[Cafeyn] Aucun titre extrait pour la recherche de l\'URL');
-                                continue;
+                                throw new Error('skip');
                             }
                             originalTitle = title;
                             searchQuery = processTitleToQuery(title) || title;
@@ -759,7 +759,7 @@
 
                         if (items.length === 0) {
                             console.warn('[Cafeyn] Aucun résultat pour :', searchQuery);
-                            continue;
+                            throw new Error('skip');
                         }
 
                         // Trouver le meilleur match par similarité
@@ -780,7 +780,7 @@
                             const minSim = matchedByDescription ? 15 : 35;
                             if (!bestMatch || maxSim < minSim) {
                                 console.warn('[Cafeyn] Aucun article avec une similarité suffisante trouvé (maxSim: ' + maxSim + '%)');
-                                continue;
+                                throw new Error('skip');
                             }
                         } else {
                             bestMatch = items[0];
@@ -804,7 +804,7 @@
                     }
                 } catch (cafeynErr) {
                     console.warn('[Cafeyn] Échec :', cafeynErr.message);
-                    continue;
+                    throw new Error('skip');
                 }
             }
 
@@ -840,7 +840,7 @@
                             const { title } = await getExtractedTitleAndDate();
                             if (!title) {
                                 console.warn('[PressReader] Aucun titre extrait pour la recherche de l\'URL');
-                                continue;
+                                throw new Error('skip');
                             }
                             originalTitle = title;
                             searchQuery = processTitleToQuery(title) || title;
@@ -889,7 +889,7 @@
 
                         if (!items || items.length === 0) {
                             console.warn('[PressReader] Aucun résultat de recherche pour :', searchQuery);
-                            continue;
+                            throw new Error('skip');
                         }
 
                         // Trouver le meilleur match par similarité
@@ -910,7 +910,7 @@
                             const minSim = matchedByDescription ? 15 : 35;
                             if (!bestMatch || maxSim < minSim) {
                                 console.warn('[PressReader] Aucun article avec une similarité suffisante trouvé (maxSim: ' + maxSim + '%)');
-                                continue;
+                                throw new Error('skip');
                             }
                         } else {
                             bestMatch = items[0];
@@ -934,7 +934,7 @@
                     }
                 } catch (prErr) {
                     console.warn('[PressReader] Échec :', prErr.message);
-                    continue;
+                    throw new Error('skip');
                 }
             }
 
@@ -971,13 +971,13 @@
                 // Si Europresse n'est pas configuré, on continue au prochain provider
                 if (!state.bnfUsername || !state.bnfPassword) {
                     console.warn('[BnF] Pas de credentials Europresse, passage au provider suivant');
-                    continue;
+                    throw new Error('skip');
                 }
 
                 const { title: articleTitle, date: publishedDate, description: articleDescription } = await getExtractedTitleAndDate();
                 if (!articleTitle) {
                     console.warn('[BnF] Impossible d\'obtenir le titre de l\'article, passage au suivant');
-                    continue;
+                    throw new Error('skip');
                 }
                 const articleUrl = isUrl ? titleOrUrl : '';
 
@@ -985,7 +985,7 @@
                 const query = processTitleToQuery(articleTitle);
                 if (!query) {
                     console.warn('[BnF] Impossible de construire des mots-clés, passage au suivant');
-                    continue;
+                    throw new Error('skip');
                 }
                 window.Scraper.lastQuery = query;
                 console.log('[SCRAPE] Query:', query, '| Original title:', articleTitle);
@@ -1156,7 +1156,7 @@
                 const minSim = matchedByDescription ? 15 : 20;
                 if (!bestMatch || maxSim < minSim) {
                     console.warn('[BnF] Aucun article trouvé sur Europresse, passage au suivant');
-                    continue;
+                    throw new Error('skip');
                 }
 
                 console.log('[SCRAPE] Best match:', bestMatch.title, '| Similarity:', maxSim + '%');
@@ -1175,7 +1175,7 @@
                 const contentContainer = docDoc.querySelector('.docOcurrContainer');
                 if (!contentContainer) {
                     console.warn('[BnF] Contenu introuvable, passage au suivant');
-                    continue;
+                    throw new Error('skip');
                 }
 
                 const visTitle = docDoc.querySelector('.titreArticleVisu')?.innerHTML || bestMatch.title;
@@ -1200,7 +1200,7 @@
             }
 
             if (provider === 'bpc') {
-                if (!isUrl) continue;
+                if (!isUrl) throw new Error('skip');
                 onProgress('Plugin', 'Lecture directe...', 10);
                 try {
                     const urlObj = new URL(titleOrUrl);
@@ -1216,9 +1216,18 @@
                     }
                 } catch (bpcError) {
                     console.warn('[BPC] Direct bypass failed:', bpcError);
-                    continue;
+                    throw new Error('skip');
                 }
             }
+            throw new Error('Provider ' + provider + ' skipped or failed');
+        };
+
+        try {
+            const promises = activeProviders.map(provider => fetchProvider(provider));
+            const result = await Promise.any(promises);
+            return result;
+        } catch (aggregateError) {
+            console.warn('All providers failed');
         }
 
         // Aucun fournisseur n'a pu récupérer l'article
