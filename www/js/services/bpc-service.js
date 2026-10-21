@@ -566,6 +566,7 @@
         let contentEl = null;
         if (contentSelector) contentEl = iframeDocument.querySelector(contentSelector);
         if (!contentEl) contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article') || iframeDocument.body;
+        console.log('[BPC DEBUG] contentEl tag:', contentEl?.tagName, 'class:', contentEl?.className, 'len:', contentEl?.innerHTML?.length);
 
         const hasPaywall = iframeDocument.querySelector(paywallSelector);
         const textLength = contentEl ? contentEl.textContent.trim().length : 0;

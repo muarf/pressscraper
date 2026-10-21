@@ -62,7 +62,7 @@
     },
     "lesechos.fr": {
       "name": "Les Échos",
-      "contentSelector": "div.post-paywall, article, .post-content, div[class*='article-body']",
+      "contentSelector": "article, div.post-paywall, .post-content, div[class*='article-body']",
       "paywallSelector": "div#paywall, div#registerWall, div[class*='paywall']",
       "minParagraphs": 4,
       "minTextLength": 1200

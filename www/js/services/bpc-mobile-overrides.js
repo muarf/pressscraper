@@ -208,39 +208,51 @@
             console.warn('[BPC MOBILE] lesechos: stripes non trouvés');
             return;
         }
+        console.log('[BPC MOBILE] lesechos: queries count:', json.queries.length);
+        for (var k = 0; k < json.queries.length; k++) {
+            var qk = json.queries[k];
+            var qKey = JSON.stringify(qk.queryKey || '');
+            var hasStripes = !!(qk.state && qk.state.data && qk.state.data.stripes);
+            console.log('[BPC MOBILE] query[' + k + ']: key=' + qKey.substring(0, 80) + ' hasStripes=' + hasStripes);
+        }
         var stripes = q.state.data.stripes;
-        var fullHtml = '';
-        for (var i = 0; i < stripes.length; i++) {
-            var stripe = stripes[i];
-            if (stripe && Array.isArray(stripe.mainContent)) {
-                for (var j = 0; j < stripe.mainContent.length; j++) {
-                    var mc = stripe.mainContent[j];
-                    if (mc && mc.data && mc.data.description) {
-                        fullHtml += mc.data.description;
-                    }
-                }
-            }
+        console.log('[BPC MOBILE] lesechos: stripes count:', stripes.length);
+        for (var sIdx = 0; sIdx < stripes.length; sIdx++) {
+            var st = stripes[sIdx];
+            var mcLen = (st && st.mainContent) ? st.mainContent.length : 0;
+            var descLen = (st && st.mainContent && st.mainContent[0] && st.mainContent[0].data && st.mainContent[0].data.description) ? st.mainContent[0].data.description.length : 0;
+            var descSample = descLen > 0 ? st.mainContent[0].data.description.substring(0, 100) : '';
+            console.log('[BPC MOBILE] stripe[' + sIdx + ']: type=' + (st.type || 'none') + ' mcLen=' + mcLen + ' descLen=' + descLen + ' sample=' + descSample);
         }
-        if (!fullHtml) {
-            console.warn('[BPC MOBILE] lesechos: descriptions vides dans les stripes');
-            return;
-        }
-        console.log('[BPC MOBILE] lesechos: texte complet extrait ! Longueur:', fullHtml.length);
-        var target = document.querySelector('div.post-paywall') || document.querySelector('article') || document.querySelector('.article-body');
-        if (target) {
+        var desc0 = (stripes[0] && stripes[0].mainContent && stripes[0].mainContent[0] && stripes[0].mainContent[0].data) ? stripes[0].mainContent[0].data.description : '';
+        console.log('[BPC MOBILE] lesechos: stripe 0 description length:', desc0.length);
+        console.log('[BPC MOBILE] lesechos: has div.post-paywall?', !!document.querySelector('div.post-paywall'));
+        console.log('[BPC MOBILE] lesechos: has article?', !!document.querySelector('article'));
+        var fullHtml = desc0;
+        var postPaywall = document.querySelector('div.post-paywall');
+        if (postPaywall) {
             var sanitized = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(fullHtml, dompurify_options) : fullHtml;
-            var parser = new DOMParser();
-            var doc = parser.parseFromString('<div class="' + (target.className || 'post-paywall') + '">' + sanitized + '</div>', 'text/html');
-            var newDiv = doc.querySelector('div');
-            if (newDiv) {
-                newDiv.querySelectorAll('img').forEach(function(img) { img.style.width = '100%'; });
-                target.parentNode.replaceChild(newDiv, target);
-                console.log('[BPC MOBILE] lesechos: contenu remplacé avec succès par l\\'article complet !');
+            postPaywall.innerHTML = sanitized;
+            postPaywall.style.display = 'block';
+            postPaywall.style.visibility = 'visible';
+            postPaywall.style.opacity = '1';
+            postPaywall.style.height = 'auto';
+            postPaywall.style.maxHeight = 'none';
+            console.log('[BPC MOBILE] lesechos: set postPaywall.innerHTML, length:', postPaywall.innerHTML.length);
+        } else {
+            var art = document.querySelector('article') || document.querySelector('.article-body');
+            if (art) {
+                var sanitized = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(fullHtml, dompurify_options) : fullHtml;
+                var div = document.createElement('div');
+                div.className = 'post-paywall';
+                div.innerHTML = sanitized;
+                art.appendChild(div);
+                console.log('[BPC MOBILE] lesechos: appended post-paywall into article, length:', div.innerHTML.length);
             }
         }
-        // Supprimer d'éventuels paywalls résiduels
-        var paywalls = document.querySelectorAll('div#paywall, div#registerWall, div[class*="paywall"], div[class*="Paywall"]');
-        paywalls.forEach(function(p) { p.remove(); });
+        // Supprimer d'éventuels paywalls et widgets résiduels
+        var unwanted = document.querySelectorAll('div#paywall, div#registerWall, div[class*="paywall"]:not(.post-paywall), div[class*="Paywall"], div[class*="registerWall"], aside, [class*="recommendation"], [class*="most-read"], [class*="Sticky"]');
+        unwanted.forEach(function(u) { u.remove(); });
     } catch(err) {
         console.error('[BPC MOBILE] lesechos override error:', err);
     }
