@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
+  "sites": {
+    "lemonde.fr": {
+      "name": "Le Monde",
+      "contentSelector": ".article__content",
+      "paywallSelector": "section.lmd-paywall",
+      "paragraphSelector": ".article__paragraph",
+      "minParagraphs": 3
+    },
+    "lefigaro.fr": {
+      "name": "Le Figaro",
+      "contentSelector": "div[data-component=\"fig-content-body\"]",
+      "paywallSelector": "div#fig-premium-paywall",
+      "paragraphSelector": ".fig-paragraph",
+      "minParagraphs": 3
+    },
+    "leparisien.fr": {
+      "name": "Le Parisien",
+      "contentSelector": "section#left",
+      "paywallSelector": "div.paywall",
+      "minTextLength": 800
+    },
+    "liberation.fr": {
+      "name": "Libération",
+      "contentSelector": "article[data-datawall-status], article, .article-body, .article__content",
+      "paywallSelector": "div#poool-widget, div.post-subscribe"
+    },
+    "lepoint.fr": {
+      "name": "Le Point",
+      "contentSelector": ".article-content, .article-body"
+    },
+    "marianne.net": {
+      "name": "Marianne",
+      "contentSelector": ".article-body"
+    },
+    "mediapart.fr": {
+      "name": "Mediapart",
+      "contentSelector": ".content-article"
+    },
+    "la-croix.com": {
+      "name": "La Croix",
+      "contentSelector": ".article-body"
+    },
+    "lesoir.be": {
+      "name": "Le Soir",
+      "contentSelector": ".r-content, article.r-article"
+    },
+    "lamontagne.fr": {
+      "name": "La Montagne (Centre France)",
+      "aliases": ["lepopulaire.fr", "larep.fr", "le-pays.fr"],
+      "contentSelector": "div#content section > div.flex-col"
+    },
+    "letemps.ch": {
+      "name": "Le Temps",
+      "contentSelector": "div#article-body-wrapper"
+    },
+    "courrierinternational.com": {
+      "name": "Courrier International",
+      "contentSelector": "div.article-text"
+    }
+  }
+}

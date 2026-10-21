@@ -35,6 +35,10 @@
             if (!bpcScript) { console.warn('[BPC] contentScript.js manquant'); return; }
             bpcScriptFr = localStorage.getItem('bpc_script_fr_js');
             if (!bpcScriptFr) { console.warn('[BPC] contentScript_fr.js manquant'); return; }
+
+            if (window.SitesRules && typeof window.SitesRules.syncFromRemote === 'function') {
+                window.SitesRules.syncFromRemote().catch(e => console.warn('[BPC] SitesRules sync failed:', e));
+            }
         } catch (e) {
             console.error('[BPC] Init failed:', e);
         }
@@ -527,50 +531,29 @@
         const checkInterval = 100;
         const maxWaitTime = 8000;
 
-        let contentSelector = '';
-        if (articleDomain.includes('lemonde.fr')) contentSelector = '.article__content';
-        else if (articleDomain.includes('lefigaro.fr')) contentSelector = 'div[data-component="fig-content-body"]';
-        else if (articleDomain.includes('leparisien.fr')) contentSelector = 'section#left';
-        else if (articleDomain.includes('liberation.fr')) contentSelector = 'article[data-datawall-status], article, .article-body, .article__content';
-        else if (articleDomain.includes('lepoint.fr')) contentSelector = '.article-content, .article-body';
-        else if (articleDomain.includes('marianne.net')) contentSelector = '.article-body';
-        else if (articleDomain.includes('mediapart.fr')) contentSelector = '.content-article';
-        else if (articleDomain.includes('la-croix.com')) contentSelector = '.article-body';
-        else if (articleDomain.includes('lesoir.be')) contentSelector = '.r-content, article.r-article';
-        else if (articleDomain.includes('lamontagne.fr') || articleDomain.includes('lepopulaire.fr') || articleDomain.includes('larep.fr') || articleDomain.includes('le-pays.fr')) contentSelector = 'div#content section > div.flex-col';
-        else if (articleDomain.includes('letemps.ch')) contentSelector = 'div#article-body-wrapper';
-        else if (articleDomain.includes('courrierinternational.com')) contentSelector = 'div.article-text';
-
-        const paywallSelector = 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget, meta[name="premium"][content="true"], div.post-subscribe, div.post__content--faded';
+        const siteRule = window.SitesRules ? window.SitesRules.getRuleForDomain(articleDomain) : null;
+        const contentSelector = siteRule?.contentSelector || '';
+        const paywallSelector = siteRule?.paywallSelector || 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget, meta[name="premium"][content="true"], div.post-subscribe, div.post__content--faded';
 
         await new Promise((resolve) => {
             const timer = setInterval(() => {
                 const elapsed = Date.now() - startTime;
-                let bypassSuccess = false;
                 let contentEl = null;
                 if (contentSelector) contentEl = iframeDocument.querySelector(contentSelector);
                 if (!contentEl) contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article');
-                const hasPaywall = iframeDocument.querySelector(paywallSelector);
                 const textLength = contentEl ? contentEl.textContent.trim().length : 0;
                 
                 // Track pending BPC async request count (e.g. getExtFetch from Courrier International)
                 const pendingAsync = iframeWindow.pendingAsyncRequests || 0;
 
-                if (articleDomain === 'lemonde.fr') {
-                    const hasParagraphs = iframeDocument.querySelectorAll('.article__paragraph').length >= 3;
-                    const paywallGone = !iframeDocument.querySelector('section.lmd-paywall');
-                    if (hasParagraphs && paywallGone) bypassSuccess = true;
-                } else if (articleDomain === 'lefigaro.fr') {
-                    const hasParagraphs = iframeDocument.querySelectorAll('.fig-paragraph').length >= 3;
-                    const paywallGone = !iframeDocument.querySelector('div#fig-premium-paywall');
-                    if (hasParagraphs && paywallGone) bypassSuccess = true;
-                } else if (articleDomain === 'leparisien.fr') {
-                    const leftSection = iframeDocument.querySelector('section#left');
-                    const paywallGone = !iframeDocument.querySelector('div.paywall');
-                    if (leftSection && leftSection.textContent.length > 800 && paywallGone) bypassSuccess = true;
+                let bypassSuccess = false;
+                if (window.SitesRules) {
+                    bypassSuccess = window.SitesRules.checkBypassSuccess(siteRule, iframeDocument, textLength, pendingAsync);
                 } else {
-                    if (!hasPaywall && textLength > 800 && pendingAsync === 0) bypassSuccess = true;
+                    const hasPaywall = iframeDocument.querySelector(paywallSelector);
+                    bypassSuccess = !hasPaywall && textLength > 800 && pendingAsync === 0;
                 }
+
                 if (bypassSuccess || elapsed >= maxWaitTime) { clearInterval(timer); resolve(); }
             }, checkInterval);
         });
