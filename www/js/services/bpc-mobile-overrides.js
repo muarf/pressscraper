@@ -167,6 +167,88 @@
         },
 
         // ----------------------------------------------------------------
+        // Les Échos & Historia
+        // ----------------------------------------------------------------
+        // Problem: The full article body is stored in window.__REACT_QUERY_STATE__
+        //          inside a script tag, but standard BPC requires a paywall element
+        //          (div#paywall, div#registerWall) that is absent in anonymous mobile loads.
+        // Solution: Extract the article text directly from the React Query state and
+        //          replace the teaser content in div.post-paywall / article.
+        {
+            domains: ['lesechos.fr', 'historia.fr'],
+            script: function(articleUrl, articlePathname, articleOrigin) {
+                return `(function() {
+    try {
+        console.log('[BPC MOBILE] lesechos: searching for __REACT_QUERY_STATE__...');
+        var filter = /window\\.__REACT_QUERY_STATE__\\s?=\\s?/;
+        var scripts = document.querySelectorAll('script');
+        var jsonScript = Array.prototype.find.call(scripts, function(s) {
+            return filter.test(s.textContent || s.text || '');
+        });
+        if (!jsonScript) {
+            console.warn('[BPC MOBILE] lesechos: script __REACT_QUERY_STATE__ introuvable');
+            return;
+        }
+        var rawText = jsonScript.textContent || jsonScript.text || '';
+        var match = rawText.split(filter);
+        if (!match || match.length < 2) {
+            console.warn('[BPC MOBILE] lesechos: impossible de parser split(__REACT_QUERY_STATE__)');
+            return;
+        }
+        var jsonStr = match[1].split('};')[0] + '}';
+        var json = JSON.parse(jsonStr);
+        if (!json || !json.queries) {
+            console.warn('[BPC MOBILE] lesechos: pas de queries dans le JSON');
+            return;
+        }
+        var q = json.queries.find(function(x) {
+            return x && x.state && x.state.data && x.state.data.stripes;
+        });
+        if (!q || !q.state || !q.state.data || !q.state.data.stripes) {
+            console.warn('[BPC MOBILE] lesechos: stripes non trouvés');
+            return;
+        }
+        var stripes = q.state.data.stripes;
+        var fullHtml = '';
+        for (var i = 0; i < stripes.length; i++) {
+            var stripe = stripes[i];
+            if (stripe && Array.isArray(stripe.mainContent)) {
+                for (var j = 0; j < stripe.mainContent.length; j++) {
+                    var mc = stripe.mainContent[j];
+                    if (mc && mc.data && mc.data.description) {
+                        fullHtml += mc.data.description;
+                    }
+                }
+            }
+        }
+        if (!fullHtml) {
+            console.warn('[BPC MOBILE] lesechos: descriptions vides dans les stripes');
+            return;
+        }
+        console.log('[BPC MOBILE] lesechos: texte complet extrait ! Longueur:', fullHtml.length);
+        var target = document.querySelector('div.post-paywall') || document.querySelector('article') || document.querySelector('.article-body');
+        if (target) {
+            var sanitized = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(fullHtml, dompurify_options) : fullHtml;
+            var parser = new DOMParser();
+            var doc = parser.parseFromString('<div class="' + (target.className || 'post-paywall') + '">' + sanitized + '</div>', 'text/html');
+            var newDiv = doc.querySelector('div');
+            if (newDiv) {
+                newDiv.querySelectorAll('img').forEach(function(img) { img.style.width = '100%'; });
+                target.parentNode.replaceChild(newDiv, target);
+                console.log('[BPC MOBILE] lesechos: contenu remplacé avec succès par l\\'article complet !');
+            }
+        }
+        // Supprimer d'éventuels paywalls résiduels
+        var paywalls = document.querySelectorAll('div#paywall, div#registerWall, div[class*="paywall"], div[class*="Paywall"]');
+        paywalls.forEach(function(p) { p.remove(); });
+    } catch(err) {
+        console.error('[BPC MOBILE] lesechos override error:', err);
+    }
+})();`;
+            }
+        },
+
+        // ----------------------------------------------------------------
         // Template for future sites — copy and adapt this block:
         // ----------------------------------------------------------------
         // {

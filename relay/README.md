@@ -12,7 +12,7 @@ Ce micro-relais gratuit reçoit les signalements d'échec et les propositions de
    - Collez le contenu de `cloudflare-worker.js`.
    - Cliquez sur **Save and deploy**.
 5. Allez dans l'onglet **Settings** > **Variables** :
-   - Ajoutez `TELEGRAM_BOT_TOKEN` : `8867499796:AAFWwNTKwnO2ZQJZyn-xa_Hnxqhhuniz-Og` (en cochant "Encrypt").
-   - Ajoutez `TELEGRAM_CHAT_ID` : `1137117016` (en cochant "Encrypt").
+   - Ajoutez `TELEGRAM_BOT_TOKEN` : `VOTRE_BOT_TOKEN_TELEGRAM` (en cochant "Encrypt").
+   - Ajoutez `TELEGRAM_CHAT_ID` : `VOTRE_CHAT_ID` (en cochant "Encrypt").
 6. Votre URL de worker (ex: `https://pressscraper-relay.votrenom.workers.dev`) est prête !
    - Vous pouvez coller cette URL dans les Paramètres de l'application ou l'utiliser comme URL par défaut.

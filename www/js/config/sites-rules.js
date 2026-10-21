@@ -78,6 +78,13 @@
             "courrierinternational.com": {
                 name: "Courrier International",
                 contentSelector: "div.article-text"
+            },
+            "lesechos.fr": {
+                name: "Les Échos",
+                contentSelector: "div.post-paywall, article, .post-content, div[class*='article-body']",
+                paywallSelector: "div#paywall, div#registerWall, div[class*='paywall']",
+                minParagraphs: 4,
+                minTextLength: 1200
             }
         }
     };

@@ -1178,14 +1178,23 @@ public class BnfLoginPlugin extends Plugin {
                 WebView tempWebView = new WebView(getContext());
                 tempWebView.getSettings().setJavaScriptEnabled(true);
                 tempWebView.getSettings().setDomStorageEnabled(true);
+                tempWebView.getSettings().setDatabaseEnabled(true);
+                try {
+                    android.webkit.CookieManager.getInstance().setAcceptCookie(true);
+                    android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(tempWebView, true);
+                } catch (Exception ignored) {}
                 
+                // Emulate realistic viewport so anti-bot challenges don't reject 0x0 headless views
+                tempWebView.layout(0, 0, 1080, 2400);
+
                 if (userAgent != null && !userAgent.isEmpty()) {
                     tempWebView.getSettings().setUserAgentString(userAgent);
                 }
 
-                // Add a timeout of 12 seconds
+                // Add a timeout of 15 seconds
                 Handler timeoutHandler = new Handler(Looper.getMainLooper());
                 final boolean[] resolved = {false};
+                final int[] challengeAttempts = {0};
                 
                 Runnable timeoutRunnable = new Runnable() {
                     @Override
@@ -1218,7 +1227,7 @@ public class BnfLoginPlugin extends Plugin {
                         );
                     }
                 };
-                timeoutHandler.postDelayed(timeoutRunnable, 12000);
+                timeoutHandler.postDelayed(timeoutRunnable, 15000);
 
                 tempWebView.setWebViewClient(new WebViewClient() {
                     @Override
@@ -1227,27 +1236,52 @@ public class BnfLoginPlugin extends Plugin {
                         Log.d(TAG, "fetchHtmlViaWebView: finished loading " + loadedUrl);
                         
                         if (resolved[0]) return;
-                        
-                        timeoutHandler.removeCallbacks(timeoutRunnable);
-                        resolved[0] = true;
 
+                        // Check if the page is currently displaying an Akamai / Cloudflare challenge
                         view.evaluateJavascript(
-                            "(function() { return document.documentElement.outerHTML; })()",
+                            "(function() { " +
+                            "  var body = document.body ? document.body.innerHTML : '';" +
+                            "  var title = document.title ? document.title.toLowerCase() : '';" +
+                            "  var isChallenge = !!document.getElementById('sec-if-cpt-container') || " +
+                            "                    body.indexOf('sec-if-cpt') !== -1 || " +
+                            "                    body.indexOf('sec-cpt') !== -1 || " +
+                            "                    title.indexOf('just a moment') !== -1;" +
+                            "  return JSON.stringify({ isChallenge: isChallenge, html: document.documentElement.outerHTML });" +
+                            "})()",
                             value -> {
                                 try {
-                                    String html = "";
+                                    String jsonStr = "";
                                     if (value != null && !value.equals("null")) {
-                                        html = new org.json.JSONTokener(value).nextValue().toString();
+                                        jsonStr = new org.json.JSONTokener(value).nextValue().toString();
                                     }
+                                    org.json.JSONObject obj = new org.json.JSONObject(jsonStr);
+                                    boolean isChallenge = obj.optBoolean("isChallenge", false);
+                                    String html = obj.optString("html", "");
+
+                                    // If Akamai challenge is running, wait for it to solve and reload (up to 3 times)
+                                    if (isChallenge && challengeAttempts[0] < 3) {
+                                        challengeAttempts[0]++;
+                                        Log.d(TAG, "fetchHtmlViaWebView: Security challenge running, waiting for reload... attempt " + challengeAttempts[0]);
+                                        return;
+                                    }
+
+                                    if (resolved[0]) return;
+                                    timeoutHandler.removeCallbacks(timeoutRunnable);
+                                    resolved[0] = true;
+
                                     JSObject result = new JSObject();
                                     result.put("status", 200);
                                     result.put("data", html);
                                     call.resolve(result);
-                                } catch (Exception e) {
-                                    Log.e(TAG, "fetchHtmlViaWebView javascript eval error", e);
-                                    call.reject(e.getMessage());
-                                } finally {
                                     view.destroy();
+                                } catch (Exception e) {
+                                    Log.e(TAG, "fetchHtmlViaWebView eval error", e);
+                                    if (!resolved[0]) {
+                                        timeoutHandler.removeCallbacks(timeoutRunnable);
+                                        resolved[0] = true;
+                                        call.reject(e.getMessage());
+                                        view.destroy();
+                                    }
                                 }
                             }
                         );

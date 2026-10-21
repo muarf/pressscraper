@@ -16,7 +16,7 @@
     const STORAGE_KEY_ADMIN_CHAT_ID = 'ps_admin_telegram_chat_id';
 
     // URL par défaut du relais public (peut être mis à jour ou surchargé dans l'app)
-    const DEFAULT_RELAY_URL = 'https://pressscraper-relay.muarf.workers.dev';
+    const DEFAULT_RELAY_URL = 'https://pressscraper-relay.muarfanar.workers.dev';
 
     function getRelayUrl() {
         return localStorage.getItem(STORAGE_KEY_RELAY_URL) || DEFAULT_RELAY_URL;

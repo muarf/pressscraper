@@ -55,7 +55,7 @@ export default {
         text = `⚠️ *Signalement d'échec de site*\n\n` +
                `🌐 *Domaine :* \`${data.domain || 'Inconnu'}\`\n` +
                `🔗 *URL :* ${data.url || 'N/A'}\n` +
-               `❌ *Erreur :* ${data.reason || 'Échec d\\'extraction'}\n` +
+               `❌ *Erreur :* ${data.reason || "Échec d'extraction"}\n` +
                `🎯 *Sélecteur tenté :* \`${data.selector || 'générique'}\`\n` +
                `📱 *Version App :* ${data.appVersion || 'N/A'}`;
       }

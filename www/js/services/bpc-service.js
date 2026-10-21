@@ -168,7 +168,7 @@
 
         let sanitizedHtml = pageRes.data.replace(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi, (match, attrs, content) => {
             if (attrs.includes('application/ld+json') || attrs.includes('application/json')) return match;
-            return `<script type="disabled-javascript" ${attrs.replace(/\bsrc=/gi, 'data-src=')}>/* disabled */</script>`;
+            return `<script type="disabled-javascript" ${attrs.replace(/\bsrc=/gi, 'data-src=')}>${content}</script>`;
         });
 
         iframeDocument.open();
@@ -340,9 +340,12 @@
             let scripts = iframeDocument.querySelectorAll('script[type="application/ld+json"]');
             return Array.prototype.find.call(scripts, s => s.text.includes('"articleBody"') || s.text.includes('"articlebody"'));
         };
-        iframeWindow.getSourceJsonScript = function(filter, attributes = ':not([src], [type])') {
-            let scripts = iframeDocument.querySelectorAll('script' + attributes);
-            return Array.prototype.find.call(scripts, s => filter.test(s.text));
+        iframeWindow.getSourceJsonScript = function(filter, attributes = '') {
+            let selector = attributes && attributes !== ':not([src], [type])'
+                ? 'script' + attributes
+                : 'script:not([src]):not([data-src])';
+            let scripts = iframeDocument.querySelectorAll(selector);
+            return Array.prototype.find.call(scripts, s => filter.test(s.textContent || s.text || ''));
         };
         iframeWindow.archiveRandomDomain = function() {
             const domains = ['archive.ph', 'archive.is', 'archive.li', 'archive.today', 'archive.md', 'archive.vn'];
