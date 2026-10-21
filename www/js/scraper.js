@@ -1249,16 +1249,9 @@
         const BnfLogin = window.Capacitor.Plugins.BnfLogin;
 
         // 1. Détermination du User-Agent
-        let customUA = defaultUA;
-        if (siteConfig.useragent === 'googlebot') {
-            customUA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
-        } else if (siteConfig.useragent === 'bingbot') {
-            customUA = 'Mozilla/5.0 (compatible; Bingbot/2.0; +http://www.bing.com/bingbot.htm)';
-        } else if (siteConfig.useragent === 'facebookbot') {
-            customUA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_voiced.html)';
-        } else if (siteConfig.useragent_custom) {
-            customUA = siteConfig.useragent_custom;
-        }
+        const customUA = window.BpcMobileOverrides && typeof window.BpcMobileOverrides.getCustomUA === 'function'
+            ? window.BpcMobileOverrides.getCustomUA(articleUrl, siteConfig, defaultUA)
+            : defaultUA;
 
         // 2. Préparation des headers de requête
         const headers = {
@@ -1735,6 +1728,15 @@
             })(window.__windowProxy__, window.__windowProxy__, window.__windowProxy__, window.__documentProxy__, window.__locationProxy__);
         `;
         iframeDocument.head.appendChild(bootstrapScript);
+        if (typeof window.BpcMobileOverrides !== 'undefined') {
+            const mobileOverrideCode = window.BpcMobileOverrides.getOverrideScript(articleUrl);
+            if (mobileOverrideCode) {
+                console.log('[BPC] Applying mobile override for:', articleDomain);
+                const mobileOverrideScript = iframeDocument.createElement('script');
+                mobileOverrideScript.text = mobileOverrideCode;
+                iframeDocument.head.appendChild(mobileOverrideScript);
+            }
+        }
 
         // 7. Attente active de la résolution du bypass
         onProgress('Plugin', 'Récupération du contenu...', 60);
@@ -1748,7 +1750,7 @@
         if (articleDomain.includes('lemonde.fr')) contentSelector = '.article__content';
         else if (articleDomain.includes('lefigaro.fr')) contentSelector = 'div[data-component="fig-content-body"]';
         else if (articleDomain.includes('leparisien.fr')) contentSelector = 'section#left';
-        else if (articleDomain.includes('liberation.fr')) contentSelector = '.article-body, .article__content';
+        else if (articleDomain.includes('liberation.fr')) contentSelector = 'article[data-datawall-status], article, .article-body, .article__content';
         else if (articleDomain.includes('lepoint.fr')) contentSelector = '.article-content, .article-body';
         else if (articleDomain.includes('marianne.net')) contentSelector = '.article-body';
         else if (articleDomain.includes('mediapart.fr')) contentSelector = '.content-article';
@@ -1756,6 +1758,7 @@
         else if (articleDomain.includes('lesoir.be')) contentSelector = '.r-content, article.r-article';
         else if (articleDomain.includes('lamontagne.fr') || articleDomain.includes('lepopulaire.fr') || articleDomain.includes('larep.fr') || articleDomain.includes('le-pays.fr')) contentSelector = 'div#content section > div.flex-col';
         else if (articleDomain.includes('letemps.ch')) contentSelector = 'div#article-body-wrapper';
+        else if (articleDomain.includes('courrierinternational.com')) contentSelector = 'div.article-text';
 
         const paywallSelector = 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget, meta[name="premium"][content="true"], div.post-subscribe, div.post__content--faded';
 

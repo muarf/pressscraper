@@ -112,16 +112,9 @@
         const BnfLogin = window.Capacitor.Plugins.BnfLogin;
         const defaultUA = authHeaders?.['User-Agent'] || await getUA();
 
-        let customUA = defaultUA;
-        if (siteConfig.useragent === 'googlebot') {
-            customUA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
-        } else if (siteConfig.useragent === 'bingbot') {
-            customUA = 'Mozilla/5.0 (compatible; Bingbot/2.0; +http://www.bing.com/bingbot.htm)';
-        } else if (siteConfig.useragent === 'facebookbot') {
-            customUA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_voiced.html)';
-        } else if (siteConfig.useragent_custom) {
-            customUA = siteConfig.useragent_custom;
-        }
+        const customUA = window.BpcMobileOverrides && typeof window.BpcMobileOverrides.getCustomUA === 'function'
+            ? window.BpcMobileOverrides.getCustomUA(articleUrl, siteConfig, defaultUA)
+            : defaultUA;
 
         const headers = { 'User-Agent': customUA, 'Referer': 'https://www.google.com/' };
 
@@ -538,7 +531,7 @@
         if (articleDomain.includes('lemonde.fr')) contentSelector = '.article__content';
         else if (articleDomain.includes('lefigaro.fr')) contentSelector = 'div[data-component="fig-content-body"]';
         else if (articleDomain.includes('leparisien.fr')) contentSelector = 'section#left';
-        else if (articleDomain.includes('liberation.fr')) contentSelector = '.article-body, .article__content';
+        else if (articleDomain.includes('liberation.fr')) contentSelector = 'article[data-datawall-status], article, .article-body, .article__content';
         else if (articleDomain.includes('lepoint.fr')) contentSelector = '.article-content, .article-body';
         else if (articleDomain.includes('marianne.net')) contentSelector = '.article-body';
         else if (articleDomain.includes('mediapart.fr')) contentSelector = '.content-article';

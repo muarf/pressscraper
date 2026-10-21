@@ -85,6 +85,88 @@
         },
 
         // ----------------------------------------------------------------
+        // Libération
+        // ----------------------------------------------------------------
+        // Problem: The BPC rule fires only when `div.article-body-paywall` is present.
+        //          On mobile, pages are fetched without scripts/sessions so the paywall element
+        //          is never injected into the DOM, leaving only the preview paragraph.
+        // Solution: Call the Arc API directly unconditionally with the x-api-key,
+        //          reconstruct the full article body, and inject it into the article element.
+        {
+            domains: ['liberation.fr'],
+            script: function(articleUrl, articlePathname, articleOrigin) {
+                return `(function() {
+    try {
+        var article = document.querySelector('article[data-datawall-status]') || document.querySelector('article');
+        if (!article) {
+            console.warn('[BPC MOBILE] liberation: article element not found');
+            return;
+        }
+        var apiUrl = 'https://arc.api.liberation.fr/content/v4/?website=liberation&website_url=' + encodeURIComponent(${JSON.stringify(articlePathname)});
+        console.log('[BPC MOBILE] liberation: fetching Arc API:', apiUrl);
+        getExtFetch(apiUrl, '', { headers: { 'x-api-key': 'a7X29mBvQeP1Ld98CgF2rK5uTzWY4h' } }, function(url, rawData) {
+            try {
+                if (!rawData) {
+                    console.warn('[BPC MOBILE] liberation: empty API response');
+                    return;
+                }
+                var json = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+                if (!json || !json.content_elements || !json.content_elements.length) {
+                    console.warn('[BPC MOBILE] liberation: no content elements in API response');
+                    return;
+                }
+                var pars = json.content_elements;
+                article.innerHTML = '';
+                for (var i = 0; i < pars.length; i++) {
+                    var par = pars[i];
+                    if (par.type === 'header' && par.content) {
+                        var tag = (par.level && par.level >= 1 && par.level <= 6) ? ('h' + par.level) : 'h2';
+                        var h = document.createElement(tag);
+                        h.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(par.content, dompurify_options) : par.content;
+                        article.appendChild(h);
+                    } else if ((par.type === 'text' || par.type === 'raw_html') && par.content) {
+                        var p = document.createElement('p');
+                        p.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(par.content, dompurify_options) : par.content;
+                        article.appendChild(p);
+                    } else if (par.type === 'quote' && par.content) {
+                        var bq = document.createElement('blockquote');
+                        bq.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(par.content, dompurify_options) : par.content;
+                        article.appendChild(bq);
+                    } else if (par.type === 'correction' && par.text) {
+                        var pCorr = document.createElement('p');
+                        pCorr.style.fontStyle = 'italic';
+                        pCorr.innerText = par.text;
+                        article.appendChild(pCorr);
+                    } else if (par.type === 'image' && par.url) {
+                        var fig = document.createElement('figure');
+                        var img = document.createElement('img');
+                        img.src = par.url;
+                        fig.appendChild(img);
+                        if (par.caption) {
+                            var figcap = document.createElement('figcaption');
+                            figcap.innerText = par.caption;
+                            fig.appendChild(figcap);
+                        }
+                        article.appendChild(fig);
+                    } else if (par.type === 'oembed_response' && par.raw_oembed && par.raw_oembed.html) {
+                        var divOembed = document.createElement('div');
+                        divOembed.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(par.raw_oembed.html, dompurify_options) : par.raw_oembed.html;
+                        article.appendChild(divOembed);
+                    }
+                }
+                console.log('[BPC MOBILE] liberation: injected', pars.length, 'elements, text length:', article.textContent.length);
+            } catch (err) {
+                console.error('[BPC MOBILE] liberation callback error:', err);
+            }
+        });
+    } catch(e) {
+        console.error('[BPC MOBILE] liberation override error:', e);
+    }
+})();`;
+            }
+        },
+
+        // ----------------------------------------------------------------
         // Template for future sites — copy and adapt this block:
         // ----------------------------------------------------------------
         // {
@@ -124,6 +206,10 @@
         return null;
     }
 
+    const customUserAgents = {
+        'atlantico.fr': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+    };
+
     global.BpcMobileOverrides = {
         /**
          * Returns the IIFE script string to inject for a given URL, or null if no override.
@@ -140,6 +226,37 @@
                 console.error('[BpcMobileOverrides] getOverrideScript error:', e);
                 return null;
             }
+        },
+
+        /**
+         * Returns the customized User-Agent based on URL or site config.
+         * @param {string} articleUrl
+         * @param {Object} siteConfig
+         * @param {string} defaultUA
+         * @returns {string}
+         */
+        getCustomUA: function(articleUrl, siteConfig, defaultUA) {
+            try {
+                var hostname = new URL(articleUrl).hostname.toLowerCase();
+                for (var domain in customUserAgents) {
+                    if (hostname === domain || hostname.endsWith('.' + domain)) {
+                        return customUserAgents[domain];
+                    }
+                }
+            } catch(e) {}
+
+            if (siteConfig) {
+                if (siteConfig.useragent === 'googlebot') {
+                    return 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+                } else if (siteConfig.useragent === 'bingbot') {
+                    return 'Mozilla/5.0 (compatible; Bingbot/2.0; +http://www.bing.com/bingbot.htm)';
+                } else if (siteConfig.useragent === 'facebookbot') {
+                    return 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_voiced.html)';
+                } else if (siteConfig.useragent_custom) {
+                    return siteConfig.useragent_custom;
+                }
+            }
+            return defaultUA;
         }
     };
 
