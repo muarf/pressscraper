@@ -17,3 +17,5 @@ Thumbs.db
 cafeyn_temp/
 .env
 test.txt
+*.keystore
+keystore-base64.txt

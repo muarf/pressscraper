@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
   "sites": {
     "lemonde.fr": {
@@ -66,6 +66,42 @@
       "paywallSelector": "div#paywall, div#registerWall, div[class*='paywall']",
       "minParagraphs": 4,
       "minTextLength": 1200
+    },
+    "challenges.fr": {
+      "name": "Challenges",
+      "contentSelector": "article, .article-content, div[class*='article__content']",
+      "minParagraphs": 4,
+      "minTextLength": 1500
+    },
+    "alternatives-economiques.fr": {
+      "name": "Alternatives Économiques",
+      "contentSelector": "article, .article__content, div[class*='article-body']",
+      "minParagraphs": 3,
+      "minTextLength": 1200
+    },
+    "charliehebdo.fr": {
+      "name": "Charlie Hebdo",
+      "contentSelector": "article, .article-content, div[class*='article-body']",
+      "minParagraphs": 3,
+      "minTextLength": 1200
+    },
+    "sciencesetavenir.fr": {
+      "name": "Sciences et Avenir",
+      "contentSelector": "article, .article-content, div[class*='article__content']",
+      "minParagraphs": 3,
+      "minTextLength": 1000
+    },
+    "atlantico.fr": {
+      "name": "Atlantico",
+      "contentSelector": "article, div[class*='article-body'], .article-content",
+      "minParagraphs": 4,
+      "minTextLength": 1500
+    },
+    "lecanardenchaine.fr": {
+      "name": "Le Canard enchaîné",
+      "contentSelector": "article, .article-content, div[class*='article-body']",
+      "minParagraphs": 3,
+      "minTextLength": 1000
     }
   }
 }
