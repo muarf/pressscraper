@@ -748,6 +748,9 @@
         fill.style.width = '5%';
         actions.style.display = 'none';
         openBtn.style.display = 'none';
+        const reportBtn = document.getElementById('reportErrorBtn');
+        if (reportBtn) reportBtn.style.display = 'none';
+        window._lastScrapeAttempt = { url: targetUrlOrQuery, fallbackTitle };
 
         let sessionRetry = false;
         const startTime = Date.now();
@@ -866,6 +869,15 @@
             icon.className = 'fas fa-exclamation-triangle';
             document.getElementById('statusTitle').textContent = 'Erreur';
             document.getElementById('statusSub').textContent = e.message;
+
+            const reportBtn = document.getElementById('reportErrorBtn');
+            if (reportBtn) {
+                reportBtn.style.display = 'inline-flex';
+                reportBtn.disabled = false;
+                reportBtn.innerHTML = '<i class="fas fa-flag"></i> Signaler l\'erreur';
+            }
+            actions.style.display = 'flex';
+            openBtn.style.display = 'none';
             
             // Si disponible, pré-remplit l'input avec les mots-clés générés pour modification
             if (window.Scraper && window.Scraper.lastQuery) {
@@ -882,8 +894,46 @@
         const btn = document.getElementById('scrapeBtn');
         btn.disabled = false;
         btn.classList.remove('loading');
-                btn.innerHTML = '<i class="fas fa-magic"></i> Sauvegarder';
+        btn.innerHTML = '<i class="fas fa-magic"></i> Sauvegarder';
     }
+
+    window.reportCurrentScrapeError = async function() {
+        const reportBtn = document.getElementById('reportErrorBtn');
+        const attempt = window._lastScrapeAttempt || {};
+        const url = attempt.url || document.getElementById('urlInput')?.value || '';
+        const errorMsg = document.getElementById('statusSub')?.textContent || 'Erreur inconnue';
+        
+        let domain = '';
+        try { domain = new URL(url).hostname; } catch(_) { domain = url; }
+
+        if (reportBtn) {
+            reportBtn.disabled = true;
+            reportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
+        }
+
+        try {
+            if (window.FeedbackService) {
+                await window.FeedbackService.reportSiteError({
+                    url: url,
+                    domain: domain,
+                    reason: errorMsg
+                });
+                if (reportBtn) {
+                    reportBtn.innerHTML = '<i class="fas fa-check"></i> Signalé !';
+                }
+                toast('Signalement envoyé aux développeurs !', 'success');
+            } else {
+                throw new Error('Service de feedback non disponible');
+            }
+        } catch(err) {
+            console.error('[Feedback] Report failed:', err);
+            if (reportBtn) {
+                reportBtn.disabled = false;
+                reportBtn.innerHTML = '<i class="fas fa-redo"></i> Réessayer';
+            }
+            toast('Échec de l\'envoi : ' + err.message, 'error');
+        }
+    };
 
     // ===== VISIONNEUSE D'ARTICLE =====
     window.openArticle = async function() {
@@ -1110,6 +1160,8 @@
         // PR referent
         const prRefInput = document.getElementById('settingsPrReferer');
         if (prRefInput) prRefInput.value = state.pressReaderReferer || 'https://mabm.toulouse-metropole.fr/default/presse.aspx?_lg=fr-FR';
+
+        updateSitesRulesUI();
     }
 
     window.savePrReferer = function() {
@@ -1189,6 +1241,128 @@
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-sync"></i> Mettre à jour les règles';
+        }
+    };
+
+    function updateSitesRulesUI() {
+        const badge = document.getElementById('rulesCountBadge');
+        if (badge && window.SitesRules) {
+            const all = window.SitesRules.getAllRules();
+            const user = window.SitesRules.getUserRules();
+            const userCount = Object.keys(user).length;
+            const totalCount = Object.keys(all).length;
+            badge.textContent = `${totalCount} site(s) ${userCount > 0 ? `(${userCount} personnalisé(s))` : ''}`;
+        }
+        if (window.FeedbackService) {
+            const relayInput = document.getElementById('relayUrlInput');
+            if (relayInput) relayInput.value = window.FeedbackService.getRelayUrl() || '';
+            const admin = window.FeedbackService.getAdminCredentials();
+            const tokenInput = document.getElementById('adminTgTokenInput');
+            const chatInput = document.getElementById('adminTgChatIdInput');
+            if (tokenInput) tokenInput.value = admin.token || '';
+            if (chatInput) chatInput.value = admin.chatId || '';
+        }
+    }
+
+    window.syncSitesRulesUI = async function() {
+        if (!window.SitesRules) return;
+        toast('Synchronisation des règles depuis GitHub...', '');
+        const ok = await window.SitesRules.syncFromRemote();
+        if (ok) {
+            toast('Règles mises à jour depuis GitHub !', 'success');
+            updateSitesRulesUI();
+        } else {
+            toast('Échec de synchronisation ou règles déjà à jour.', 'warning');
+        }
+    };
+
+    window.saveFeedbackConfigUI = function() {
+        if (!window.FeedbackService) return;
+        const relayVal = document.getElementById('relayUrlInput')?.value;
+        const tokenVal = document.getElementById('adminTgTokenInput')?.value;
+        const chatVal = document.getElementById('adminTgChatIdInput')?.value;
+        window.FeedbackService.setRelayUrl(relayVal);
+        window.FeedbackService.setAdminCredentials(tokenVal, chatVal);
+        toast('Configuration enregistrée en local !', 'success');
+    };
+
+    let _lastTestedRuleProposal = null;
+
+    window.testRuleSelectorUI = async function() {
+        const domain = document.getElementById('ruleInputDomain')?.value.trim();
+        const selector = document.getElementById('ruleInputSelector')?.value.trim();
+        const testUrl = document.getElementById('ruleInputTestUrl')?.value.trim();
+        const resultEl = document.getElementById('ruleTestResult');
+        const proposeBtn = document.getElementById('proposeRuleBtn');
+
+        if (!domain || !selector || !testUrl) {
+            toast('Veuillez remplir le domaine, le sélecteur et l\'URL de test', 'warning');
+            return;
+        }
+
+        resultEl.style.display = 'block';
+        resultEl.style.color = 'var(--text-secondary)';
+        resultEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Test en cours de l\'extraction...';
+        proposeBtn.disabled = true;
+
+        try {
+            // Enregistrement temporaire de la règle en local pour le test
+            window.SitesRules.setUserRule(domain, { contentSelector: selector });
+            
+            // Lancement du test via fetch ou bridge WebView
+            let html = '';
+            const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
+            if (typeof window.Capacitor !== 'undefined' && BnfLogin && typeof BnfLogin.fetchHtmlViaWebView === 'function') {
+                const res = await BnfLogin.fetchHtmlViaWebView({ url: testUrl });
+                html = res?.data || '';
+            } else {
+                const r = await fetch(testUrl);
+                html = await r.text();
+            }
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const targetEl = doc.querySelector(selector);
+            const textLen = targetEl ? targetEl.textContent.trim().length : 0;
+
+            if (targetEl && textLen > 500) {
+                resultEl.style.color = '#2ed573';
+                resultEl.innerHTML = `✅ Sélecteur valide ! Extrait : <strong>${textLen} caractères</strong>.`;
+                proposeBtn.disabled = false;
+                _lastTestedRuleProposal = {
+                    domain: domain,
+                    contentSelector: selector,
+                    testUrl: testUrl,
+                    extractedLength: textLen
+                };
+                toast('Test réussi ! Vous pouvez proposer la règle.', 'success');
+            } else {
+                resultEl.style.color = '#ff4757';
+                resultEl.innerHTML = `❌ Échec : Élément non trouvé ou contenu trop court (${textLen} car.).`;
+                proposeBtn.disabled = true;
+            }
+        } catch(err) {
+            resultEl.style.color = '#ff4757';
+            resultEl.innerHTML = `❌ Erreur lors du test : ${err.message}`;
+            proposeBtn.disabled = true;
+        }
+    };
+
+    window.submitRuleProposalUI = async function() {
+        if (!_lastTestedRuleProposal || !window.FeedbackService) return;
+        const proposeBtn = document.getElementById('proposeRuleBtn');
+        proposeBtn.disabled = true;
+        proposeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
+
+        try {
+            await window.FeedbackService.submitRuleProposal(_lastTestedRuleProposal);
+            proposeBtn.innerHTML = '<i class="fas fa-check"></i> Règle envoyée !';
+            toast('Proposition envoyée aux développeurs ! Merci.', 'success');
+        } catch(err) {
+            console.error('[Feedback] Proposal failed:', err);
+            proposeBtn.disabled = false;
+            proposeBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Réessayer';
+            toast('Échec de l\'envoi : ' + err.message, 'error');
         }
     };
 
