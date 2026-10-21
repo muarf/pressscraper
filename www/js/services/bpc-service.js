@@ -2,6 +2,7 @@
     'use strict';
 
     let bpcSites = null;
+    let bpcSitesMap = null;
     let bpcScript = null;
     let bpcScriptFr = null;
 
@@ -21,6 +22,23 @@
         });
     }
 
+    function buildSiteMap() {
+        if (!bpcSites) return;
+        bpcSitesMap = new Map();
+        for (const key in bpcSites) {
+            const site = bpcSites[key];
+            if (!site || (!site.domain && !site.group)) continue;
+            if (site.domain) {
+                bpcSitesMap.set(site.domain, { name: key, ...site });
+            }
+            if (site.group && Array.isArray(site.group)) {
+                for (const domain of site.group) {
+                    bpcSitesMap.set(domain, { name: key, ...site, domain });
+                }
+            }
+        }
+    }
+
     async function init() {
         try {
             console.log('[BPC] Initializing rules...');
@@ -30,6 +48,7 @@
                 return;
             }
             bpcSites = await evalSitesInWorker(sitesData);
+            buildSiteMap();
             console.log('[BPC] Sites loaded. Domains count:', Object.keys(bpcSites).length);
             bpcScript = localStorage.getItem('bpc_script_js');
             if (!bpcScript) { console.warn('[BPC] contentScript.js manquant'); return; }
@@ -43,20 +62,15 @@
     init().catch(e => console.error('[BPC] Auto-init failed:', e));
 
     function findSiteConfig(hostname) {
-        if (!bpcSites) return null;
-        for (const key in bpcSites) {
-            const site = bpcSites[key];
-            if (!site || (!site.domain && !site.group)) continue;
-            if (site.domain && (hostname === site.domain || hostname.endsWith('.' + site.domain))) {
-                return { name: key, ...site };
+        if (!bpcSitesMap) return null;
+
+        let parts = hostname.split('.');
+        while (parts.length >= 1) {
+            let current = parts.join('.');
+            if (bpcSitesMap.has(current)) {
+                return bpcSitesMap.get(current);
             }
-            if (site.group && Array.isArray(site.group)) {
-                for (const domain of site.group) {
-                    if (hostname === domain || hostname.endsWith('.' + domain)) {
-                        return { name: key, ...site, domain };
-                    }
-                }
-            }
+            parts.shift();
         }
         return null;
     }
