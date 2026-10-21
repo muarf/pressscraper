@@ -854,20 +854,10 @@
         throw new Error(errorMsg);
     }
 
-    // ─── Old Scraper compatibility ───
-    if (!global.Scraper) global.Scraper = {};
-
-    // Save old initBpc (from scraper.js) before overriding
-    if (typeof global.Scraper._oldInitBpc === 'undefined') {
-        global.Scraper._oldInitBpc = global.Scraper.initBpc;
-    }
-
-    // Override: new orchestrator-based scrapeArticle
+    // ─── Scraper facade compatibility ───
+    global.Scraper = global.Scraper || { lastQuery: null };
     global.Scraper.scrapeArticle = scrapeArticle;
-
-    // initBpc must propagate to BpcService (used by orchestrator for BPC)
     global.Scraper.initBpc = async function() {
-        if (global.Scraper._oldInitBpc) await global.Scraper._oldInitBpc();
         if (global.BpcService && global.BpcService.reinit) await global.BpcService.reinit();
     };
 
