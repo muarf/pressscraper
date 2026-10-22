@@ -606,7 +606,9 @@
             || iframeDocument.querySelector('meta[name="twitter:title"]')?.getAttribute('content')
             || iframeDocument.title || 'Article direct';
         const sourceName = siteConfig.name.split(' (')[0].split(' (+')[0];
-        const finalHtml = `<style>${window.PRINT_CSS}</style><h1>${bpcPageTitle}</h1>${contentEl.innerHTML}`;
+        const existingH1 = contentEl ? contentEl.querySelector('h1') : null;
+        const titleHeader = existingH1 ? '' : `<h1>${bpcPageTitle}</h1>`;
+        const finalHtml = `<style>${window.PRINT_CSS}</style>${titleHeader}${contentEl ? contentEl.innerHTML : ''}`;
 
         iframe.remove();
 
