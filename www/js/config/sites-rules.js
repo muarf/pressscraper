@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 19,
+        version: 20,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -122,9 +122,11 @@
             },
             "atlantico.fr": {
                 name: "Atlantico",
-                contentSelector: "article, div[class*='article-body'], .article-content",
+                contentSelector: "div[class*='print:w-full'], main, div.paywalled-content",
+                paywallSelector: "div.tonos-offer, div.tonos-native-soft-paywall, [class*='tonos']",
+                removeSelector: "[class*='print:hidden'], nav.article-breadcrumb, .ad-slot-outer, .footer-ad, div.footer-ad, .tonos-offer, [class*='tonos']",
                 minParagraphs: 4,
-                minTextLength: 1500
+                minTextLength: 1200
             },
             "lejdd.fr": {
                 name: "Le Journal du Dimanche",

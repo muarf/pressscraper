@@ -554,6 +554,22 @@
         },
 
         // ----------------------------------------------------------------
+        // Atlantico
+        // ----------------------------------------------------------------
+        {
+            domains: ['atlantico.fr'],
+            script: function(articleUrl, articlePathname, articleOrigin) {
+                return `(function() {
+    try {
+        var junk = document.querySelectorAll('[class*="print:hidden"], nav.article-breadcrumb, .ad-slot-outer, .footer-ad, div.footer-ad, .tonos-offer, [class*="tonos"]');
+        junk.forEach(function(el) { el.remove(); });
+        console.log('[BPC MOBILE] atlantico: cleaned print:hidden, breadcrumbs and ads');
+    } catch(e) { console.error('[BPC MOBILE] atlantico error:', e); }
+})();`;
+            }
+        },
+
+        // ----------------------------------------------------------------
         // Charlie Hebdo
         // ----------------------------------------------------------------
         // WordPress REST API provides full article text via internal app key.

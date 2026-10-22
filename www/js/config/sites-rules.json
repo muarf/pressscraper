@@ -1,5 +1,5 @@
 {
-  "version": 19,
+  "version": 20,
   "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
   "sites": {
     "lemonde.fr": {
@@ -103,9 +103,11 @@
     },
     "atlantico.fr": {
       "name": "Atlantico",
-      "contentSelector": "article, div[class*='article-body'], .article-content",
+      "contentSelector": "div[class*='print:w-full'], main, div.paywalled-content",
+      "paywallSelector": "div.tonos-offer, div.tonos-native-soft-paywall, [class*='tonos']",
+      "removeSelector": "[class*='print:hidden'], nav.article-breadcrumb, .ad-slot-outer, .footer-ad, div.footer-ad, .tonos-offer, [class*='tonos']",
       "minParagraphs": 4,
-      "minTextLength": 1500
+      "minTextLength": 1200
     },
     "lejdd.fr": {
       "name": "Le Journal du Dimanche",
