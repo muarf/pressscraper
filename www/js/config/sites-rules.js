@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 17,
+        version: 18,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -111,9 +111,12 @@
             },
             "sciencesetavenir.fr": {
                 name: "Sciences et Avenir",
-                contentSelector: "article, .article-content, div[class*='article__content']",
-                minParagraphs: 3,
-                minTextLength: 1000
+                contentSelector: "section.content, article, div.corps",
+                paywallSelector: "#poool-widget, .paying, .paywall-article",
+                removeSelector: "p.breadcrumb, div.article-share, #poool-widget, .paying, .m-audio__bar, .article-reactions, .article-tags, [class*='placeholder'], aside, .content-right, div#comments, .commentaires, .article-read-trigger",
+                paragraphSelector: "p",
+                minParagraphs: 4,
+                minTextLength: 1200
             },
             "atlantico.fr": {
                 name: "Atlantico",

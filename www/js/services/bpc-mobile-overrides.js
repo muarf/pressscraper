@@ -500,12 +500,21 @@
             script: function(articleUrl, articlePathname, articleOrigin) {
                 return `(function() {
     try {
-        var poool = document.querySelectorAll('#poool-widget, .poool-widget, .paywall-article');
+        var poool = document.querySelectorAll('#poool-widget, .poool-widget, .paywall-article, .paying');
         poool.forEach(function(el) { el.remove(); });
-        var sidebar = document.querySelectorAll('.views-article-sidebar, .views-article__sticky-wrapper, .views-article__buttons--desktop, .views-article__buttons--mobile, [class*="feed-item-carousel"], a[href*="google.com"]');
+        var sidebar = document.querySelectorAll('.views-article-sidebar, .views-article__sticky-wrapper, .views-article__buttons--desktop, .views-article__buttons--mobile, [class*="feed-item-carousel"], a[href*="google.com"], .content-right, .article-share, .m-audio__bar, .article-reactions, .article-tags, .article-read-trigger, p.breadcrumb');
         sidebar.forEach(function(el) { el.remove(); });
-        console.log('[BPC MOBILE] challenges: removed poool widget, sidebars and carousels');
-    } catch(e) { console.error('[BPC MOBILE] challenges error:', e); }
+        var imgs = document.querySelectorAll('img[data-src]');
+        imgs.forEach(function(img) {
+            var dataSrc = img.getAttribute('data-src');
+            if (dataSrc && !dataSrc.includes('placeholder')) {
+                img.src = dataSrc;
+                img.removeAttribute('data-src');
+                img.classList.remove('lazyload');
+            }
+        });
+        console.log('[BPC MOBILE] challenges/sciencesetavenir: removed poool widget, sidebars, resolved lazyload images');
+    } catch(e) { console.error('[BPC MOBILE] challenges/sciencesetavenir error:', e); }
 })();`;
             }
         },
