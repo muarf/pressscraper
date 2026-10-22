@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 8,
+        version: 9,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -128,10 +128,12 @@
             "sudouest.fr": {
                 name: "Sud Ouest",
                 aliases: ["charentelibre.fr", "larepubliquedespyrenees.fr"],
-                contentSelector: "article, .article-content, div[class*='article-content'], div.content",
-                removeSelector: ".visible-not-premium, .footer-premium, div.pub, div.ph-easy-subscription",
-                minParagraphs: 3,
-                minTextLength: 1200
+                contentSelector: ".article-body-wrapper.visible-premium, div.article-body-wrapper, div.article-body",
+                paywallSelector: "meta[name='gsoi:article-premium'][content='true'], html.article-premium, .visible-not-premium, .footer-premium",
+                removeSelector: ".visible-not-premium, .footer-premium, div.pub, div.ph-easy-subscription, .article-footer",
+                paragraphSelector: "p",
+                minParagraphs: 4,
+                minTextLength: 1500
             },
             "capital.fr": {
                 name: "Capital",
