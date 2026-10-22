@@ -546,11 +546,22 @@
         const contentSelector = siteRule?.contentSelector || '';
         const paywallSelector = siteRule?.paywallSelector || 'div[id*="paywall"], section[class*="paywall"], div[class*="paywall"], #poool-widget, meta[name="premium"][content="true"], div.post-subscribe, div.post__content--faded';
 
+        const queryFirstSelector = (doc, sel) => {
+            if (!sel) return null;
+            const parts = sel.split(',').map(s => s.trim()).filter(Boolean);
+            for (const part of parts) {
+                try {
+                    const el = doc.querySelector(part);
+                    if (el) return el;
+                } catch (_) {}
+            }
+            return null;
+        };
+
         await new Promise((resolve) => {
             const timer = setInterval(() => {
                 const elapsed = Date.now() - startTime;
-                let contentEl = null;
-                if (contentSelector) contentEl = iframeDocument.querySelector(contentSelector);
+                let contentEl = queryFirstSelector(iframeDocument, contentSelector);
                 if (!contentEl) contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article');
                 const textLength = contentEl ? contentEl.textContent.trim().length : 0;
                 
@@ -571,8 +582,7 @@
 
         onProgress('Plugin', 'Extraction du texte...', 80);
 
-        let contentEl = null;
-        if (contentSelector) contentEl = iframeDocument.querySelector(contentSelector);
+        let contentEl = queryFirstSelector(iframeDocument, contentSelector);
         if (!contentEl) contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article') || iframeDocument.body;
         console.log('[BPC DEBUG] contentEl tag:', contentEl?.tagName, 'class:', contentEl?.className, 'len:', contentEl?.innerHTML?.length);
 

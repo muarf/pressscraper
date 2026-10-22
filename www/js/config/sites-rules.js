@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 9,
+        version: 10,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -153,8 +153,9 @@
             },
             "le1hebdo.fr": {
                 name: "Le 1 Hebdo",
-                contentSelector: "article, .article-content, div[class*='article']",
-                removeSelector: ".qiota-wrapper, .qiota-container, [id*='qiota']",
+                contentSelector: "div.article-intro, .article-intro, div.article-text",
+                removeSelector: ".article-top, .article-settings, .latest-newspaper-posts, #all-newspaper, #newspaper-summary, .bloc-partage, .qiota-wrapper, .qiota-container, [id*='qiota'], .qiota_onboard",
+                paragraphSelector: "p",
                 minParagraphs: 3,
                 minTextLength: 1000
             },
