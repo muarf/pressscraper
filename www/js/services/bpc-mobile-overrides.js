@@ -508,6 +508,57 @@
     } catch(e) { console.error('[BPC MOBILE] challenges error:', e); }
 })();`;
             }
+        },
+
+        // ----------------------------------------------------------------
+        // Charlie Hebdo
+        // ----------------------------------------------------------------
+        // WordPress REST API provides full article text via internal app key.
+        {
+            domains: ['charliehebdo.fr'],
+            script: function(articleUrl, articlePathname, articleOrigin) {
+                return `(function() {
+    try {
+        var shortlink = document.querySelector('link[rel="shortlink"]');
+        var m = shortlink && shortlink.href ? shortlink.href.match(/[?&]p=(\\d+)/) : null;
+        var postId = m ? m[1] : null;
+        if (!postId) {
+            var art = document.querySelector('article[id^="post-"]');
+            if (art) postId = art.id.replace('post-', '');
+        }
+        if (!postId) {
+            var fav = document.querySelector('input[name="favorite_post"]');
+            if (fav) postId = fav.value;
+        }
+        if (!postId) {
+            console.warn('[BPC MOBILE] charliehebdo: post ID not found');
+            return;
+        }
+        var apiUrl = 'https://charliehebdo.fr/wp-json/wp/v2/posts/' + postId + '?appkey=JeSuisCharlie2023';
+        console.log('[BPC MOBILE] charliehebdo: fetching full text from API:', apiUrl);
+        getExtFetch(apiUrl, 'content.rendered', {}, function(url, data) {
+            try {
+                if (!data) {
+                    console.warn('[BPC MOBILE] charliehebdo: empty API response');
+                    return;
+                }
+                var target = document.querySelector('div#principal, div.ch-paywalled-content');
+                if (target) {
+                    target.innerHTML = DOMPurify.sanitize(data, dompurify_options);
+                    target.querySelectorAll('section[data-a_lire_aussi_article]').forEach(function(el) { el.remove(); });
+                    var paywall = document.querySelectorAll('#paywall, .ch-paywall-container, .qiota_hidden');
+                    paywall.forEach(function(el) { el.remove(); });
+                    console.log('[BPC MOBILE] charliehebdo: full content injected, length:', target.textContent.length);
+                }
+            } catch(err) {
+                console.error('[BPC MOBILE] charliehebdo callback error:', err);
+            }
+        });
+    } catch(e) {
+        console.error('[BPC MOBILE] charliehebdo error:', e);
+    }
+})();`;
+            }
         }
     ];
 

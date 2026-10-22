@@ -1,5 +1,5 @@
 {
-  "version": 15,
+  "version": 17,
   "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
   "sites": {
     "lemonde.fr": {
@@ -83,9 +83,12 @@
     },
     "charliehebdo.fr": {
       "name": "Charlie Hebdo",
-      "contentSelector": "article, .article-content, div[class*='article-body']",
-      "minParagraphs": 3,
-      "minTextLength": 1200
+      "contentSelector": "article[id^='post-'], article, div#principal",
+      "paywallSelector": "#paywall, .ch-paywall-container, .qiota_hidden",
+      "removeSelector": "#paywall, .ch-paywall-container, .qiota_hidden, .share-btn, button[class*='share'], aside, [class*='single_social'], section[data-a_lire_aussi_article], [class*='photoZoom'], .js-swiper-slide, input[name='favorite_post'], label[for^='fav_'], [id^='icon_'], .sr-only",
+      "paragraphSelector": "p",
+      "minParagraphs": 4,
+      "minTextLength": 3000
     },
     "sciencesetavenir.fr": {
       "name": "Sciences et Avenir",

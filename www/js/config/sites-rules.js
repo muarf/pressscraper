@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 15,
+        version: 17,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -102,9 +102,12 @@
             },
             "charliehebdo.fr": {
                 name: "Charlie Hebdo",
-                contentSelector: "article, .article-content, div[class*='article-body']",
-                minParagraphs: 3,
-                minTextLength: 1200
+                contentSelector: "article[id^='post-'], article, div#principal",
+                paywallSelector: "#paywall, .ch-paywall-container, .qiota_hidden",
+                removeSelector: "#paywall, .ch-paywall-container, .qiota_hidden, .share-btn, button[class*='share'], aside, [class*='single_social'], section[data-a_lire_aussi_article], [class*='photoZoom'], .js-swiper-slide, input[name='favorite_post'], label[for^='fav_'], [id^='icon_'], .sr-only",
+                paragraphSelector: "p",
+                minParagraphs: 4,
+                minTextLength: 3000
             },
             "sciencesetavenir.fr": {
                 name: "Sciences et Avenir",
@@ -280,6 +283,7 @@
      */
     function checkBypassSuccess(rule, iframeDoc, textLength, pendingAsync) {
         if (!iframeDoc) return false;
+        if ((pendingAsync || 0) > 0) return false;
 
         const effectivePaywallSelector = rule?.paywallSelector || DEFAULT_PAYWALL_SELECTOR;
         const hasPaywall = iframeDoc.querySelector(effectivePaywallSelector);
@@ -287,7 +291,9 @@
 
         // Condition par nombre de paragraphes
         if (rule?.paragraphSelector && rule?.minParagraphs) {
-            const paragraphs = iframeDoc.querySelectorAll(rule.paragraphSelector).length;
+            const effectiveContentSelector = rule?.contentSelector || DEFAULT_CONTENT_SELECTOR;
+            const contentEl = iframeDoc.querySelector(effectiveContentSelector) || iframeDoc.body;
+            const paragraphs = contentEl.querySelectorAll(rule.paragraphSelector).length;
             return paragraphs >= rule.minParagraphs && paywallGone;
         }
 
@@ -297,7 +303,7 @@
         }
 
         // Condition générique par défaut
-        return paywallGone && textLength > 800 && (pendingAsync || 0) === 0;
+        return paywallGone && textLength > 800;
     }
 
     /**
