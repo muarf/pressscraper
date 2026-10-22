@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 5,
+        version: 6,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -189,6 +189,14 @@
                 name: "Groupe IPM (La Libre Belgique)",
                 aliases: ["dhnet.be", "moustique.be"],
                 contentSelector: "article, .ap-Story, .article-body, div[class*='article']",
+                minParagraphs: 3,
+                minTextLength: 1000
+            },
+            "telerama.fr": {
+                name: "Télérama",
+                contentSelector: "article.article__page-content, article, div.article__content",
+                paywallSelector: "section.paywall, div.paywall",
+                paragraphSelector: "article.article__page-content p, article p",
                 minParagraphs: 3,
                 minTextLength: 1000
             }

@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
   "sites": {
     "lemonde.fr": {
@@ -170,6 +170,14 @@
       "name": "Groupe IPM (La Libre Belgique)",
       "aliases": ["dhnet.be", "moustique.be"],
       "contentSelector": "article, .ap-Story, .article-body, div[class*='article']",
+      "minParagraphs": 3,
+      "minTextLength": 1000
+    },
+    "telerama.fr": {
+      "name": "Télérama",
+      "contentSelector": "article.article__page-content, article, div.article__content",
+      "paywallSelector": "section.paywall, div.paywall",
+      "paragraphSelector": "article.article__page-content p, article p",
       "minParagraphs": 3,
       "minTextLength": 1000
     }

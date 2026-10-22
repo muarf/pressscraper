@@ -278,10 +278,43 @@
         //             var articleNew = doc.querySelector(articleSel);
         //             if (articleNew) article.parentNode.replaceChild(articleNew, article);
         //         });
-        //     } catch(e) { console.error('[BPC MOBILE] example.com error:', e); }
-        // })();`;
-        //     }
-        // },
+        // ----------------------------------------------------------------
+        // Télérama
+        // ----------------------------------------------------------------
+        // Problem: The BPC rule fires only when `section.paywall` is present.
+        //          On mobile, pages are fetched anonymously so this element
+        //          is absent, and getExtFetch is never called.
+        // Solution: Call the Télérama tablet API unconditionally.
+        {
+            domains: ['telerama.fr'],
+            script: function(articleUrl, articlePathname, articleOrigin) {
+                return `(function() {
+    try {
+        var apiUrl = 'https://apps.telerama.fr/tlr/v1/premium-android-tablet/element?id=' + encodeURIComponent(${JSON.stringify(articlePathname)});
+        console.log('[BPC MOBILE] telerama: fetching tablet API:', apiUrl);
+        getExtFetch(apiUrl, 'templates.raw_content.content', {}, function(url, data) {
+            try {
+                if (!data) { console.warn('[BPC MOBILE] telerama: empty API response'); return; }
+                console.log('[BPC MOBILE] telerama: got response, length:', data.length);
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(data, 'text/html');
+                var articleNew = doc.querySelector('article.article__page-content') || doc.querySelector('article');
+                if (!articleNew) { console.warn('[BPC MOBILE] telerama: article not found in API response'); return; }
+                var target = document.querySelector('article.article__page-content') || document.querySelector('article');
+                if (target && target.parentNode) {
+                    target.parentNode.replaceChild(articleNew, target);
+                } else {
+                    document.body.appendChild(articleNew);
+                }
+                var pw = document.querySelectorAll('section.paywall, div[class*="paywall"], #poool-widget');
+                pw.forEach(function(el) { el.remove(); });
+                console.log('[BPC MOBILE] telerama: successfully injected full article');
+            } catch(err) { console.error('[BPC MOBILE] telerama callback error:', err); }
+        });
+    } catch(e) { console.error('[BPC MOBILE] telerama override error:', e); }
+})();`;
+            }
+        }
     ];
 
     /**
