@@ -12,8 +12,7 @@
         'marianne.net': ['marianne'],
         'courrierinternational.com': ['courrier'],
         'letemps.ch': ['temps'],
-        'lexpress.fr': ['express', "l'express"],
-        'lecanardenchaine.fr': ['canard', 'enchaîné', 'enchaine']
+        'lexpress.fr': ['express', "l'express"]
     };
 
     function getKeywordsForUrl(url) {

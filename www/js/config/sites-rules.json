@@ -97,14 +97,6 @@
       "minParagraphs": 4,
       "minTextLength": 1500
     },
-    "lecanardenchaine.fr": {
-      "name": "Le Canard enchaîné",
-      "contentSelector": "#js-article .editorial, #js-article, article, .article-content",
-      "paywallSelector": "div#paywall, div.paywall, .p3-widget, [class*='paywall']",
-      "removeSelector": ".list-breadcrumb, .share-sticky, .no-xsmall, #share-sticky-pixel-to-watch, [class*='share'], .smaller-font, .sr-only, .visually-hidden",
-      "minParagraphs": 3,
-      "minTextLength": 1000
-    },
     "lejdd.fr": {
       "name": "Le Journal du Dimanche",
       "contentSelector": "article, div[class*='article-body'], .article-content, div.article__content",
