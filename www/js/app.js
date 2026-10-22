@@ -831,7 +831,8 @@
                     if (window._lastScrapeAttempt) {
                         window._lastScrapeAttempt.scraped = scraped;
                         window._lastScrapeAttempt.contentLength = (scraped.html || '').length;
-                        window._lastScrapeAttempt.htmlSnippet = (scraped.html || '').substring(0, 1500);
+                        window._lastScrapeAttempt.fullHtml = scraped.html || '';
+                        window._lastScrapeAttempt.htmlSnippet = (scraped.html || '').substring(0, 1000);
                     }
 
                     // UI succès
@@ -949,7 +950,7 @@
 
         let url = ctx.url || '';
         let trace = ctx.trace || '';
-        let htmlSnippet = ctx.htmlSnippet || '';
+        let fullHtml = ctx.fullHtml || '';
         let contentLength = ctx.contentLength || 0;
         let selector = ctx.selector || '';
 
@@ -960,10 +961,10 @@
                 currentArt = await window.DB.getArticleFromDb(state.currentArticleId);
                 if (currentArt) {
                     if (!url) url = currentArt.url || '';
-                    const fullHtml = currentArt.html_content || currentArt.content || currentArt.html || '';
-                    if (!htmlSnippet && fullHtml) {
-                        htmlSnippet = fullHtml.substring(0, 1500);
-                        contentLength = fullHtml.length;
+                    const artHtml = currentArt.html_content || currentArt.content || currentArt.html || '';
+                    if (!fullHtml && artHtml) {
+                        fullHtml = artHtml;
+                        contentLength = artHtml.length;
                     }
                 }
             } catch (_) {}
@@ -972,7 +973,9 @@
         // Sinon vérification sur la dernière tentative de scraping
         const attempt = window._lastScrapeAttempt || {};
         if (!url) url = attempt.url || document.getElementById('urlInput')?.value || '';
-        if (!htmlSnippet && attempt.htmlSnippet) htmlSnippet = attempt.htmlSnippet;
+        if (!fullHtml && attempt.fullHtml) fullHtml = attempt.fullHtml;
+        if (!fullHtml && attempt.rawHtml) fullHtml = attempt.rawHtml;
+        if (!fullHtml && attempt.htmlSnippet) fullHtml = attempt.htmlSnippet;
         if (!contentLength && attempt.contentLength) contentLength = attempt.contentLength;
 
         // Construction d'une trace riche
@@ -1004,7 +1007,7 @@
 
         window._activeReportContext.url = url;
         window._activeReportContext.trace = trace;
-        window._activeReportContext.htmlSnippet = htmlSnippet;
+        window._activeReportContext.fullHtml = fullHtml;
         window._activeReportContext.contentLength = contentLength;
         window._activeReportContext.selector = selector;
 
@@ -1071,7 +1074,8 @@
                 selector: includeTech ? (ctx.selector || '') : '',
                 contentLength: includeTech ? (ctx.contentLength || null) : null,
                 trace: includeTech ? (ctx.trace || '') : '',
-                htmlSnippet: includeTech ? (ctx.htmlSnippet || '') : ''
+                fullHtml: includeTech ? (ctx.fullHtml || '') : '',
+                htmlSnippet: includeTech ? (ctx.fullHtml ? ctx.fullHtml.substring(0, 1000) : '') : ''
             };
 
             await window.FeedbackService.reportSiteError(payload);

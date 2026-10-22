@@ -106,6 +106,7 @@
             selector: details.selector || '',
             contentLength: details.contentLength || null,
             trace: details.trace || '',
+            fullHtml: details.fullHtml || details.htmlSnippet || '',
             htmlSnippet: details.htmlSnippet || '',
             appVersion: appVersion,
             timestamp: new Date().toISOString()
@@ -123,15 +124,31 @@
                          `📱 *Version App :* ${payload.appVersion}`;
 
             if (payload.trace) {
-                const cleanTrace = payload.trace.replace(/[`*_\\]/g, '').slice(0, 600);
-                text += `\n\n📋 *Trace :*\n\`\`\`\n${cleanTrace}\n\`\`\``;
-            }
-            if (payload.htmlSnippet) {
-                const cleanHtml = payload.htmlSnippet.replace(/[`*_\\]/g, '').slice(0, 700);
-                text += `\n\n📄 *HTML :*\n\`\`\`html\n${cleanHtml}\n\`\`\``;
+                const cleanTrace = payload.trace.replace(/[`*_\\]/g, '').slice(0, 2000);
+                text += `\n\n📋 *Trace d'exécution :*\n\`\`\`\n${cleanTrace}\n\`\`\``;
             }
 
-            return await sendDirectToTelegram(admin.token, admin.chatId, text);
+            await sendDirectToTelegram(admin.token, admin.chatId, text);
+
+            // Envoi du document HTML complet
+            if (payload.fullHtml && payload.fullHtml.length > 30) {
+                try {
+                    const safeDomain = (payload.domain || 'article').replace(/[^a-zA-Z0-9.-]/g, '_');
+                    const formData = new FormData();
+                    formData.append('chat_id', admin.chatId);
+                    const blob = new Blob([payload.fullHtml], { type: 'text/html;charset=utf-8' });
+                    formData.append('document', blob, `${safeDomain}_complet.html`);
+                    formData.append('caption', `📄 Source HTML intégrale (${payload.fullHtml.length} car.) pour ${payload.domain}`);
+                    await fetch(`https://api.telegram.org/bot${admin.token}/sendDocument`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                } catch (docErr) {
+                    console.error('[Feedback] Direct sendDocument error:', docErr);
+                }
+            }
+
+            return true;
         }
 
         // Sinon, envoi via le relais

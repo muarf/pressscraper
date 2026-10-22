@@ -62,15 +62,12 @@ export default {
                `📱 *Version App :* ${data.appVersion || 'N/A'}`;
 
         if (data.trace) {
-          const cleanTrace = String(data.trace).replace(/[`*_\\]/g, '').slice(0, 600);
-          text += `\n\n📋 *Trace :*\n\`\`\`\n${cleanTrace}\n\`\`\``;
-        }
-        if (data.htmlSnippet) {
-          const cleanHtml = String(data.htmlSnippet).replace(/[`*_\\]/g, '').slice(0, 700);
-          text += `\n\n📄 *HTML :*\n\`\`\`html\n${cleanHtml}\n\`\`\``;
+          const cleanTrace = String(data.trace).replace(/[`*_\\]/g, '').slice(0, 2000);
+          text += `\n\n📋 *Trace d'exécution :*\n\`\`\`\n${cleanTrace}\n\`\`\``;
         }
       }
 
+      // 1. Envoi du message récapitulatif avec métadonnées et trace
       const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,7 +87,40 @@ export default {
         });
       }
 
-      return new Response(JSON.stringify({ success: true }), {
+      // 2. Envoi du HTML complet en pièce jointe (.html) sans AUCUNE troncature
+      const fullHtml = data.fullHtml || data.htmlSnippet;
+      if (fullHtml && typeof fullHtml === 'string' && fullHtml.length > 30) {
+        try {
+          const safeDomain = (data.domain || 'article').replace(/[^a-zA-Z0-9.-]/g, '_');
+          const formData = new FormData();
+          formData.append("chat_id", chatId);
+          const file = new File([fullHtml], `${safeDomain}_complet.html`, { type: "text/html;charset=utf-8" });
+          formData.append("document", file);
+          formData.append("caption", `📄 Source HTML intégrale (${fullHtml.length} caractères) pour ${data.domain || 'article'}`);
+
+          const docRes = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+            method: "POST",
+            body: formData
+          });
+          const docData = await docRes.json();
+          return new Response(JSON.stringify({ 
+            success: true, 
+            documentSent: docData.ok === true, 
+            docError: docData.ok ? null : docData.description 
+          }), {
+            status: 200,
+            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+          });
+        } catch (docErr) {
+          console.error("sendDocument error:", docErr);
+          return new Response(JSON.stringify({ success: true, documentSent: false, docError: docErr.message }), {
+            status: 200,
+            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+          });
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true, documentSent: false }), {
         status: 200,
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
       });

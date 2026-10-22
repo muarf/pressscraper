@@ -158,6 +158,14 @@
             throw new Error(`HTTP error ${pageRes?.status || 'unknown'}${pageRes?.error ? ' : ' + pageRes.error : ''}`);
         }
 
+        if (window._lastScrapeAttempt) {
+            window._lastScrapeAttempt.rawHtml = pageRes.data;
+            if (!window._lastScrapeAttempt.fullHtml) {
+                window._lastScrapeAttempt.fullHtml = pageRes.data;
+                window._lastScrapeAttempt.contentLength = pageRes.data.length;
+            }
+        }
+
         onProgress('Plugin', 'Extraction du contenu...', 40);
 
         const iframe = document.createElement('iframe');
