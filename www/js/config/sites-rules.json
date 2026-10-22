@@ -183,8 +183,10 @@
     },
     "franc-tireur.fr": {
       "name": "Franc-Tireur",
-      "contentSelector": "#js-article-content, section.article-body, article.article, .article-body",
+      "contentSelector": "article.layout-grid__main, article.js-article, article.article",
+      "removeSelector": ".share-bar, .social-bar, [class*='share-bar'], [class*='social-bar'], article.promoted-article, .promoted-article",
       "paywallSelector": "div#poool-widget-content, #poool-widget, div[id*='poool']",
+      "paragraphSelector": "p",
       "minParagraphs": 3,
       "minTextLength": 1000
     }

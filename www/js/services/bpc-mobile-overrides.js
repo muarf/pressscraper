@@ -324,10 +324,23 @@
             script: function(articleUrl, articlePathname, articleOrigin) {
                 return `(function() {
     try {
-        var pw = document.querySelectorAll('div#poool-widget-content, #poool-widget, div[id*="poool"]');
-        pw.forEach(function(el) { el.remove(); });
-        var article = document.querySelector('section.article-body') || document.querySelector('article');
-        if (article) {
+        // Supprimer immédiatement les widgets paywall Poool et promoted
+        document.querySelectorAll('div#poool-widget-content, #poool-widget, div[id*="poool"], article.promoted-article, .promoted-article').forEach(function(el) {
+            el.remove();
+        });
+
+        // Supprimer les barres de partage social (Facebook, Twitter, presse-papier)
+        document.querySelectorAll('.share-bar, .social-bar, [class*="share-bar"], [class*="social-bar"]').forEach(function(el) {
+            el.remove();
+        });
+
+        // Cibler l'article principal (jamais promoted)
+        var mainArticle = document.querySelector('article.layout-grid__main, article.js-article, article.article');
+        if (!mainArticle) {
+            mainArticle = document.querySelector('article');
+        }
+
+        if (mainArticle) {
             var jsonScript = typeof getArticleJsonScript === 'function' ? getArticleJsonScript() : null;
             if (!jsonScript) {
                 var scripts = document.querySelectorAll('script[type="application/ld+json"]');
@@ -339,13 +352,65 @@
                 var json = JSON.parse(jsonScript.text || jsonScript.textContent);
                 if (json && json.articleBody) {
                     var rawText = json.articleBody;
-                    var formatted = rawText.replace(/\\s\\?/g, '?').split(/\\n\\n+/).map(function(p) {
-                        return '<p>' + DOMPurify.sanitize(p.trim(), dompurify_options) + '</p>';
+                    // Décodage entités HTML basiques
+                    var txt = rawText
+                        .replace(/&rsquo;/g, "'")
+                        .replace(/&lsquo;/g, "'")
+                        .replace(/&rdquo;/g, '"')
+                        .replace(/&ldquo;/g, '"')
+                        .replace(/&ndash;/g, '–')
+                        .replace(/&mdash;/g, '—')
+                        .replace(/&hellip;/g, '…')
+                        .replace(/&nbsp;/g, ' ')
+                        .replace(/\\s+\\?/g, '?');
+
+                    // Saut de paragraphe avant les répliques ou noms d'orateurs en majuscules (ex: "FRANC-TIREUR. ", "NATHANAËL. ")
+                    txt = txt.replace(/\\s+([A-ZÉÈÊËÀÂÎÏÔÛÙÇ\\s-]{3,25}\\.\\s+)/g, '\\n\\n$1');
+
+                    // Découpage intelligent par phrases (~350 à 450 car.)
+                    var chunks = txt.split(/\\n\\n+/);
+                    var allParagraphs = [];
+                    chunks.forEach(function(chunk) {
+                        if (chunk.length > 500) {
+                            var sentences = chunk.match(/[^.!?]+[.!?]+(\\s+|$)/g) || [chunk];
+                            var currentP = '';
+                            sentences.forEach(function(s) {
+                                currentP += s;
+                                if (currentP.length >= 350) {
+                                    allParagraphs.push(currentP.trim());
+                                    currentP = '';
+                                }
+                            });
+                            if (currentP.trim()) allParagraphs.push(currentP.trim());
+                        } else if (chunk.trim()) {
+                            allParagraphs.push(chunk.trim());
+                        }
+                    });
+
+                    var formattedHtml = allParagraphs.map(function(p) {
+                        return '<p style="margin-bottom: 1em; line-height: 1.6;">' + DOMPurify.sanitize(p, typeof dompurify_options !== 'undefined' ? dompurify_options : {}) + '</p>';
                     }).join('');
-                    article.innerHTML = formatted;
-                    article.setAttribute('id', 'js-article-content');
-                    document.querySelectorAll('article.promoted-article, .promoted-article').forEach(function(el) { el.remove(); });
-                    console.log('[BPC MOBILE] franc-tireur: injected full article from JSON-LD, length:', article.textContent.length);
+
+                    // Trouver ou créer le conteneur du corps
+                    var bodyContainer = mainArticle.querySelector('section.article-body') || mainArticle.querySelector('.js-poool-wrapper') || mainArticle.querySelector('.paywall');
+                    if (bodyContainer) {
+                        bodyContainer.innerHTML = formattedHtml;
+                        bodyContainer.setAttribute('id', 'js-article-content');
+                        bodyContainer.setAttribute('class', 'article-body');
+                    } else {
+                        var div = document.createElement('div');
+                        div.id = 'js-article-content';
+                        div.className = 'article-body';
+                        div.innerHTML = formattedHtml;
+                        mainArticle.appendChild(div);
+                    }
+
+                    // Nettoyage final des résidus de partage et wrappers
+                    mainArticle.querySelectorAll('.share-bar, .social-bar, article.promoted-article, .promoted-article').forEach(function(el) {
+                        el.remove();
+                    });
+
+                    console.log('[BPC MOBILE] franc-tireur: injected full formatted article (' + allParagraphs.length + ' paragraphs)');
                 }
             }
         }
