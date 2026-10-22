@@ -115,8 +115,10 @@
     },
     "capital.fr": {
       "name": "Capital",
-      "contentSelector": "article, div#articleWall, .article-content, div[class*='article-body']",
-      "removeSelector": "div#articleWall-wrapper, div.ap-AdContainer",
+      "contentSelector": "article.article-content, article, div.article-content",
+      "removeSelector": "#articleWall-wrapper, .articleWall-wrapper, [class*='articleWallGeneric'], .shareButtons, .ad, [class*='containerAds'], [class*='ads-core-placer'], .linkCard, .article-userActions, #article-googleServices",
+      "paywallSelector": "#articleWall-wrapper, .articleWall-wrapper, div[class*='articleWallGeneric']",
+      "paragraphSelector": "p",
       "minParagraphs": 3,
       "minTextLength": 1200
     },

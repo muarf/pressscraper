@@ -417,6 +417,37 @@
     } catch(e) { console.error('[BPC MOBILE] franc-tireur error:', e); }
 })();`;
             }
+        },
+
+        // ----------------------------------------------------------------
+        // Capital (capital.fr - Prisma Media)
+        // ----------------------------------------------------------------
+        {
+            domains: ['capital.fr'],
+            script: function(articleUrl, articlePathname, articleOrigin) {
+                return `(function() {
+    try {
+        // Démasquer le contenu payant
+        var paidEl = document.querySelector('#articleWall-paid, .articleWall-paid');
+        if (paidEl) {
+            paidEl.removeAttribute('hidden');
+            paidEl.style.display = 'block';
+            paidEl.style.visibility = 'visible';
+            paidEl.classList.remove('hidden');
+        }
+
+        // Supprimer le bloc de paywall
+        var walls = document.querySelectorAll('#articleWall-wrapper, .articleWall-wrapper, [class*="articleWallGeneric"]');
+        walls.forEach(function(el) { el.remove(); });
+
+        // Supprimer les pubs, boutons de partage et encarts promotionnels
+        var garbage = document.querySelectorAll('.shareButtons, .ad, [class*="containerAds"], [class*="ads-core-placer"], .linkCard, .article-userActions, #article-googleServices');
+        garbage.forEach(function(el) { el.remove(); });
+
+        console.log('[BPC MOBILE] capital.fr: unhidden paid section and removed paywall');
+    } catch(e) { console.error('[BPC MOBILE] capital.fr error:', e); }
+})();`;
+            }
         }
     ];
 
