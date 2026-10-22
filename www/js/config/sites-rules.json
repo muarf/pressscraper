@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 13,
   "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
   "sites": {
     "lemonde.fr": {
@@ -127,8 +127,9 @@
     },
     "causeur.fr": {
       "name": "Causeur",
-      "contentSelector": "article, .entry-content, .article-content, div[class*='article-body']",
-      "removeSelector": ".qiota-wrapper, .qiota-container, [id*='qiota']",
+      "contentSelector": ".td-post-content, div.td-post-content, article",
+      "removeSelector": "[class*='essb_'], .td-module-meta-sharing, [class*='td_block_related_posts'], .td-end-post, #dialog_qiota, [id*='qiota'], .qiota, iframe",
+      "paragraphSelector": "p",
       "minParagraphs": 3,
       "minTextLength": 1200
     },

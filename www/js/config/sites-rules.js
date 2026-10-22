@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 11,
+        version: 13,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -146,8 +146,9 @@
             },
             "causeur.fr": {
                 name: "Causeur",
-                contentSelector: "article, .entry-content, .article-content, div[class*='article-body']",
-                removeSelector: ".qiota-wrapper, .qiota-container, [id*='qiota']",
+                contentSelector: ".td-post-content, div.td-post-content, article",
+                removeSelector: "[class*='essb_'], .td-module-meta-sharing, [class*='td_block_related_posts'], .td-end-post, #dialog_qiota, [id*='qiota'], .qiota, iframe",
+                paragraphSelector: "p",
                 minParagraphs: 3,
                 minTextLength: 1200
             },
