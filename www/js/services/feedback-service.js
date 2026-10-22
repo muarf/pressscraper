@@ -79,31 +79,58 @@
         return true;
     }
 
+    async function getEffectiveAppVersion() {
+        try {
+            const BnfLogin = window.Capacitor?.Plugins?.BnfLogin;
+            if (BnfLogin && typeof BnfLogin.getAppVersion === 'function') {
+                const res = await BnfLogin.getAppVersion();
+                if (res && res.versionName) return res.versionName;
+            }
+        } catch (_) {}
+        return document.getElementById('appVersionText')?.textContent?.trim() || '1.1.14';
+    }
+
     /**
      * Signale un problème d'extraction sur un site
      */
     async function reportSiteError(details) {
         const admin = getAdminCredentials();
-        const appVersion = document.getElementById('appVersionText')?.textContent || '1.1.0';
+        const appVersion = await getEffectiveAppVersion();
 
         const payload = {
             type: 'site_error',
             domain: details.domain || '',
             url: details.url || '',
             reason: details.reason || 'Échec extraction',
+            comment: details.comment || '',
             selector: details.selector || '',
+            contentLength: details.contentLength || null,
+            trace: details.trace || '',
+            htmlSnippet: details.htmlSnippet || '',
             appVersion: appVersion,
             timestamp: new Date().toISOString()
         };
 
         // Si l'admin a renseigné ses identifiants locaux, envoi direct
         if (admin.token && admin.chatId) {
-            const text = `⚠️ *Signalement d'échec*\n\n` +
+            let text = `⚠️ *Signalement d'article / site*\n\n` +
                          `🌐 *Domaine :* \`${payload.domain}\`\n` +
                          `🔗 *URL :* ${payload.url}\n` +
-                         `❌ *Raison :* ${payload.reason}\n` +
-                         `🎯 *Sélecteur tenté :* \`${payload.selector || 'générique'}\`\n` +
+                         `❌ *Type :* ${payload.reason}\n` +
+                         (payload.comment ? `💬 *Commentaire :* ${payload.comment}\n` : '') +
+                         (payload.contentLength ? `📏 *Longueur :* ${payload.contentLength} car.\n` : '') +
+                         `🎯 *Sélecteur :* \`${payload.selector || 'générique'}\`\n` +
                          `📱 *Version App :* ${payload.appVersion}`;
+
+            if (payload.trace) {
+                const cleanTrace = payload.trace.replace(/[`*_\\]/g, '').slice(0, 600);
+                text += `\n\n📋 *Trace :*\n\`\`\`\n${cleanTrace}\n\`\`\``;
+            }
+            if (payload.htmlSnippet) {
+                const cleanHtml = payload.htmlSnippet.replace(/[`*_\\]/g, '').slice(0, 700);
+                text += `\n\n📄 *HTML :*\n\`\`\`html\n${cleanHtml}\n\`\`\``;
+            }
+
             return await sendDirectToTelegram(admin.token, admin.chatId, text);
         }
 
@@ -116,7 +143,7 @@
      */
     async function submitRuleProposal(proposal) {
         const admin = getAdminCredentials();
-        const appVersion = document.getElementById('appVersionText')?.textContent || '1.1.0';
+        const appVersion = await getEffectiveAppVersion();
 
         const payload = {
             type: 'rule_proposal',

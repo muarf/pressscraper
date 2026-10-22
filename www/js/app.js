@@ -700,6 +700,12 @@
         document.getElementById('statusTitle').textContent = message;
         document.getElementById('statusSub').textContent = phase;
         document.getElementById('progressFill').style.width = progress + '%';
+
+        if (window._lastScrapeAttempt) {
+            if (!window._lastScrapeAttempt.logs) window._lastScrapeAttempt.logs = [];
+            const time = new Date().toTimeString().split(' ')[0];
+            window._lastScrapeAttempt.logs.push(`[${time}] [${phase}] ${message} (${progress}%)`);
+        }
     }
 
     // ===== SCRAPING =====
@@ -752,7 +758,12 @@
         if (reportBtn) reportBtn.style.display = 'none';
         const issueBtn = document.getElementById('reportIssueBtn');
         if (issueBtn) issueBtn.style.display = 'none';
-        window._lastScrapeAttempt = { url: targetUrlOrQuery, fallbackTitle };
+        window._lastScrapeAttempt = { 
+            url: targetUrlOrQuery, 
+            fallbackTitle, 
+            startTime: Date.now(), 
+            logs: [] 
+        };
 
         let sessionRetry = false;
         const startTime = Date.now();
@@ -816,6 +827,13 @@
                     if (state.history.length > 100) state.history = state.history.slice(0, 100);
                     save();
 
+                    // Stockage des informations pour le signalement éventuel
+                    if (window._lastScrapeAttempt) {
+                        window._lastScrapeAttempt.scraped = scraped;
+                        window._lastScrapeAttempt.contentLength = (scraped.html || '').length;
+                        window._lastScrapeAttempt.htmlSnippet = (scraped.html || '').substring(0, 1500);
+                    }
+
                     // UI succès
                     fill.style.width = '100%';
                     card.className = 'status-card visible success';
@@ -863,6 +881,14 @@
         } catch(e) {
             console.error('[SCRAPE] Error:', e);
 
+            if (window._lastScrapeAttempt) {
+                window._lastScrapeAttempt.error = e.message || String(e);
+                window._lastScrapeAttempt.stack = e.stack || '';
+                if (!window._lastScrapeAttempt.logs) window._lastScrapeAttempt.logs = [];
+                const time = new Date().toTimeString().split(' ')[0];
+                window._lastScrapeAttempt.logs.push(`[${time}] [ERROR] ${e.message || e}`);
+            }
+
             // In headless mode, report error to native bridge so the service shows
             // an error notification instead of timing out silently
             if (window._headlessMode && typeof window.HeadlessBridge !== 'undefined') {
@@ -905,126 +931,175 @@
         btn.innerHTML = '<i class="fas fa-magic"></i> Sauvegarder';
     }
 
-    window.reportCurrentScrapeError = async function() {
-        const reportBtn = document.getElementById('reportErrorBtn');
-        const attempt = window._lastScrapeAttempt || {};
-        const url = attempt.url || document.getElementById('urlInput')?.value || '';
-        const errorMsg = document.getElementById('statusSub')?.textContent || 'Erreur inconnue';
-        
-        let domain = '';
-        try { domain = new URL(url).hostname; } catch(_) { domain = url; }
+    // ===== SIGNALEMENT ENRICHI (MODALE) =====
+    window._activeReportContext = null;
 
-        if (reportBtn) {
-            reportBtn.disabled = true;
-            reportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
-        }
-
-        try {
-            if (window.FeedbackService) {
-                await window.FeedbackService.reportSiteError({
-                    url: url,
-                    domain: domain,
-                    reason: errorMsg
-                });
-                if (reportBtn) {
-                    reportBtn.innerHTML = '<i class="fas fa-check"></i> Signalé !';
-                }
-                toast('Signalement envoyé aux développeurs !', 'success');
-            } else {
-                throw new Error('Service de feedback non disponible');
-            }
-        } catch(err) {
-            console.error('[Feedback] Report failed:', err);
-            if (reportBtn) {
-                reportBtn.disabled = false;
-                reportBtn.innerHTML = '<i class="fas fa-redo"></i> Réessayer';
-            }
-            toast('Échec de l\'envoi : ' + err.message, 'error');
-        }
+    window.selectReportOption = function(labelEl) {
+        if (!labelEl) return;
+        const radio = labelEl.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+        document.querySelectorAll('#reportOptions .report-option').forEach(el => el.classList.remove('active'));
+        labelEl.classList.add('active');
     };
 
-    window.reportCurrentArticleIssue = async function() {
-        const attempt = window._lastScrapeAttempt || {};
-        let url = attempt.url || '';
+    window.openReportModal = async function(ctx = {}) {
+        window._activeReportContext = { ...ctx };
+        const modal = document.getElementById('reportModal');
+        if (!modal) return;
+
+        let url = ctx.url || '';
+        let trace = ctx.trace || '';
+        let htmlSnippet = ctx.htmlSnippet || '';
+        let contentLength = ctx.contentLength || 0;
+        let selector = ctx.selector || '';
+
+        // Si on est dans le contexte d'un article en base
         if (!url && state.currentArticleId) {
-            const art = await window.DB.getArticleFromDb(state.currentArticleId);
-            url = art?.url || '';
-        }
-        if (!url) {
-            url = document.getElementById('urlInput')?.value || '';
+            try {
+                const art = await window.DB.getArticleFromDb(state.currentArticleId);
+                if (art) {
+                    url = art.url || '';
+                    if (!htmlSnippet) {
+                        htmlSnippet = (art.content || art.html || '').substring(0, 1500);
+                        contentLength = (art.content || art.html || '').length;
+                    }
+                }
+            } catch (_) {}
         }
 
-        const reason = prompt(
-            "Signaler un problème sur cet article (mise en page dégradée, texte manquant, etc.) :",
-            "Mise en page dégradée ou incomplète"
-        );
-        if (reason === null) return;
+        // Sinon vérification sur la dernière tentative de scraping
+        const attempt = window._lastScrapeAttempt || {};
+        if (!url) url = attempt.url || document.getElementById('urlInput')?.value || '';
+        if (!trace && attempt.logs) {
+            trace = attempt.logs.join('\n');
+            if (attempt.error) trace += '\n\nErreur: ' + attempt.error + (attempt.stack ? '\n' + attempt.stack : '');
+        }
+        if (!htmlSnippet && attempt.htmlSnippet) htmlSnippet = attempt.htmlSnippet;
+        if (!contentLength && attempt.contentLength) contentLength = attempt.contentLength;
 
-        const btn = document.getElementById('reportIssueBtn');
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
+        // Détection sélecteur configuré
+        if (url && window.SitesRules) {
+            try {
+                const domain = new URL(url).hostname;
+                const rule = window.SitesRules.getRuleForDomain(domain);
+                if (rule && rule.contentSelector) selector = rule.contentSelector;
+            } catch (_) {}
+        }
+
+        window._activeReportContext.url = url;
+        window._activeReportContext.trace = trace;
+        window._activeReportContext.htmlSnippet = htmlSnippet;
+        window._activeReportContext.contentLength = contentLength;
+        window._activeReportContext.selector = selector;
+
+        // Pré-remplissage de l'UI
+        const urlEl = document.getElementById('reportModalUrl');
+        if (urlEl) urlEl.textContent = url || 'URL non spécifiée';
+
+        const commentEl = document.getElementById('reportComment');
+        if (commentEl) commentEl.value = '';
+
+        const submitBtn = document.getElementById('reportSubmitBtn');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Envoyer';
+        }
+
+        // Sélection par défaut selon l'origine
+        const defaultVal = ctx.defaultType || (ctx.source === 'error' ? 'Erreur technique ou blocage' : 'Mise en page dégradée / éléments parasites');
+        const radios = document.querySelectorAll('input[name="reportType"]');
+        radios.forEach(r => {
+            const isMatch = r.value.includes(defaultVal) || defaultVal.includes(r.value);
+            r.checked = isMatch;
+            const parent = r.closest('.report-option');
+            if (parent) {
+                if (isMatch) parent.classList.add('active');
+                else parent.classList.remove('active');
+            }
+        });
+
+        modal.style.display = 'flex';
+    };
+
+    window.closeReportModal = function() {
+        const modal = document.getElementById('reportModal');
+        if (modal) modal.style.display = 'none';
+        window._activeReportContext = null;
+    };
+
+    window.submitReportModal = async function() {
+        const ctx = window._activeReportContext || {};
+        const selectedRadio = document.querySelector('input[name="reportType"]:checked');
+        const reason = selectedRadio ? selectedRadio.value : 'Problème signalé';
+        const comment = document.getElementById('reportComment')?.value?.trim() || '';
+        const includeTech = document.getElementById('reportIncludeTechData')?.checked !== false;
+
+        const url = ctx.url || document.getElementById('urlInput')?.value || '';
+        let domain = '';
+        try { domain = new URL(url).hostname; } catch (_) { domain = url; }
+
+        const submitBtn = document.getElementById('reportSubmitBtn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi...';
         }
 
         try {
-            let domain = '';
-            try { domain = new URL(url).hostname; } catch(_) { domain = url; }
-            if (window.FeedbackService) {
-                await window.FeedbackService.reportSiteError({
-                    url: url,
-                    domain: domain,
-                    reason: reason.trim() || 'Mise en page dégradée ou incomplète'
-                });
-                toast('Signalement envoyé aux développeurs !', 'success');
+            if (!window.FeedbackService) throw new Error('Service de feedback non disponible');
+
+            const payload = {
+                url: url,
+                domain: domain,
+                reason: reason,
+                comment: comment,
+                selector: includeTech ? (ctx.selector || '') : '',
+                contentLength: includeTech ? (ctx.contentLength || null) : null,
+                trace: includeTech ? (ctx.trace || '') : '',
+                htmlSnippet: includeTech ? (ctx.htmlSnippet || '') : ''
+            };
+
+            await window.FeedbackService.reportSiteError(payload);
+            toast('Signalement envoyé aux développeurs !', 'success');
+
+            // Mise à jour du bouton d'origine
+            if (ctx.triggerBtnId) {
+                const btn = document.getElementById(ctx.triggerBtnId);
+                if (btn) btn.innerHTML = '<i class="fas fa-check"></i> Signalé';
             }
-            if (btn) btn.innerHTML = '<i class="fas fa-check"></i> Signalé !';
-        } catch(e) {
-            console.error('[Feedback] Report issue failed:', e);
-            toast('Échec du signalement : ' + e.message, 'error');
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-flag"></i> Signaler';
+
+            closeReportModal();
+        } catch (err) {
+            console.error('[Feedback] Report failed:', err);
+            toast('Échec du signalement : ' + err.message, 'error');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Réessayer';
             }
         }
     };
 
-    window.reportViewerArticleIssue = async function() {
-        if (!state.currentArticleId) return;
-        const article = await window.DB.getArticleFromDb(state.currentArticleId);
-        if (!article) return;
+    window.reportCurrentScrapeError = function() {
+        openReportModal({
+            source: 'error',
+            triggerBtnId: 'reportErrorBtn',
+            defaultType: 'Erreur technique ou blocage'
+        });
+    };
 
-        const reason = prompt(
-            "Signaler un problème sur cet article (mise en page dégradée, texte manquant, etc.) :",
-            "Mise en page dégradée ou incomplète"
-        );
-        if (reason === null) return;
+    window.reportCurrentArticleIssue = function() {
+        openReportModal({
+            source: 'home_success',
+            triggerBtnId: 'reportIssueBtn',
+            defaultType: 'Mise en page dégradée / éléments parasites'
+        });
+    };
 
-        const btn = document.getElementById('viewerReportBtn');
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        }
-
-        try {
-            let domain = '';
-            try { domain = new URL(article.url).hostname; } catch(_) { domain = article.source || ''; }
-            if (window.FeedbackService) {
-                await window.FeedbackService.reportSiteError({
-                    url: article.url,
-                    domain: domain,
-                    reason: reason.trim() || 'Mise en page dégradée ou incomplète'
-                });
-                toast('Signalement envoyé aux développeurs !', 'success');
-            }
-            if (btn) btn.innerHTML = '<i class="fas fa-check"></i>';
-        } catch(e) {
-            console.error('[Feedback] Viewer report failed:', e);
-            toast('Échec du signalement : ' + e.message, 'error');
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-flag"></i>';
-            }
-        }
+    window.reportViewerArticleIssue = function() {
+        openReportModal({
+            source: 'viewer',
+            triggerBtnId: 'viewerReportBtn',
+            defaultType: 'Mise en page dégradée / éléments parasites'
+        });
     };
 
     // ===== VISIONNEUSE D'ARTICLE =====
@@ -1752,7 +1827,9 @@
                 if (res.versionName) { el.textContent = res.versionName; return; }
             }
         } catch(e) { /* ignore */ }
-        el.textContent = '1.1.0';
+        if (!el.textContent || el.textContent === '1.1.0') {
+            el.textContent = '1.1.14';
+        }
     };
 
     window.clearCache = async function() {

@@ -426,7 +426,7 @@
                 </button>
                 <p style="font-size:11px;color:var(--text-secondary);margin-top:6px;text-align:center;" id="updateStatusText"></p>
                 <p style="font-size:10px;color:var(--text-secondary);margin-top:8px;text-align:center;line-height:1.4;">
-                    Version <span id="appVersionText">1.1.0</span>
+                    Version <span id="appVersionText">1.1.14</span>
                     &middot;
                     <a href="https://github.com/muarf/pressscraper" target="_blank" style="color:var(--accent);">github.com/muarf/pressscraper</a>
                 </p>
@@ -519,6 +519,72 @@
 
         <!-- Toast -->
         <div class="toast" id="toast"><i class="fas fa-info-circle"></i><span id="toastText"></span></div>
+
+        <!-- REPORT ISSUE MODAL -->
+        <div class="modal-overlay" id="reportModal" style="display:none;" onclick="if(event.target===this) closeReportModal()">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3><i class="fas fa-flag" style="color:var(--accent);"></i> Signaler un problème</h3>
+                    <button class="modal-close-btn" onclick="closeReportModal()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-subtitle" id="reportModalUrl" style="font-size:11px;color:var(--text-secondary);word-break:break-all;margin-bottom:12px;background:var(--bg-secondary);padding:6px 8px;border-radius:6px;border:1px solid var(--border);"></p>
+                    
+                    <label style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;display:block;">Type de problème</label>
+                    <div class="report-options" id="reportOptions">
+                        <label class="report-option active" onclick="selectReportOption(this)">
+                            <input type="radio" name="reportType" value="Mise en page dégradée / éléments parasites" checked>
+                            <div class="report-option-content">
+                                <strong>🎨 Mise en page moche / parasites</strong>
+                                <span>Boutons de partage, fil d'Ariane, pubs ou mise en page cassée</span>
+                            </div>
+                        </label>
+                        <label class="report-option" onclick="selectReportOption(this)">
+                            <input type="radio" name="reportType" value="Article incomplet / texte tronqué">
+                            <div class="report-option-content">
+                                <strong>✂️ Article incomplet / tronqué</strong>
+                                <span>Seul le premier paragraphe ou une accroche a été extrait</span>
+                            </div>
+                        </label>
+                        <label class="report-option" onclick="selectReportOption(this)">
+                            <input type="radio" name="reportType" value="Paywall ou abonnement non franchi">
+                            <div class="report-option-content">
+                                <strong>🔒 Paywall / Abonnement bloqué</strong>
+                                <span>Bannière de connexion ou contenu payant non débloqué</span>
+                            </div>
+                        </label>
+                        <label class="report-option" onclick="selectReportOption(this)">
+                            <input type="radio" name="reportType" value="Erreur technique ou blocage">
+                            <div class="report-option-content">
+                                <strong>🛑 Échec / Erreur technique</strong>
+                                <span>Challenge anti-bot (Cloudflare/DataDome), timeout ou crash</span>
+                            </div>
+                        </label>
+                        <label class="report-option" onclick="selectReportOption(this)">
+                            <input type="radio" name="reportType" value="Autre problème">
+                            <div class="report-option-content">
+                                <strong>💬 Autre problème</strong>
+                                <span>Préciser ci-dessous</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <label style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-top:12px;margin-bottom:6px;display:block;">Commentaire (facultatif)</label>
+                    <textarea class="report-textarea" id="reportComment" placeholder="Détails complémentaires utiles pour le debug..." rows="2"></textarea>
+
+                    <div class="report-tech-info" style="margin-top:12px;">
+                        <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-secondary);cursor:pointer;">
+                            <input type="checkbox" id="reportIncludeTechData" checked style="accent-color:var(--accent);">
+                            <span>Envoyer les informations techniques (extrait HTML, longueur, trace, version)</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="action-btn secondary" onclick="closeReportModal()">Annuler</button>
+                    <button class="action-btn primary" id="reportSubmitBtn" onclick="submitReportModal()"><i class="fas fa-paper-plane"></i> Envoyer</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Bottom nav -->
         <nav class="bottom-nav">

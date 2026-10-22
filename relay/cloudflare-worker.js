@@ -52,12 +52,23 @@ export default {
                `📏 *Longueur extraite :* ${data.extractedLength || 0} caractères\n` +
                `📱 *Version App :* ${data.appVersion || 'N/A'}`;
       } else {
-        text = `⚠️ *Signalement d'échec de site*\n\n` +
+        text = `⚠️ *Signalement d'article / site*\n\n` +
                `🌐 *Domaine :* \`${data.domain || 'Inconnu'}\`\n` +
                `🔗 *URL :* ${data.url || 'N/A'}\n` +
-               `❌ *Erreur :* ${data.reason || "Échec d'extraction"}\n` +
+               `❌ *Type :* ${data.reason || "Échec d'extraction"}\n` +
+               (data.comment ? `💬 *Commentaire :* ${data.comment}\n` : '') +
+               (data.contentLength ? `📏 *Longueur :* ${data.contentLength} car.\n` : '') +
                `🎯 *Sélecteur tenté :* \`${data.selector || 'générique'}\`\n` +
                `📱 *Version App :* ${data.appVersion || 'N/A'}`;
+
+        if (data.trace) {
+          const cleanTrace = String(data.trace).replace(/[`*_\\]/g, '').slice(0, 600);
+          text += `\n\n📋 *Trace :*\n\`\`\`\n${cleanTrace}\n\`\`\``;
+        }
+        if (data.htmlSnippet) {
+          const cleanHtml = String(data.htmlSnippet).replace(/[`*_\\]/g, '').slice(0, 700);
+          text += `\n\n📄 *HTML :*\n\`\`\`html\n${cleanHtml}\n\`\`\``;
+        }
       }
 
       const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
