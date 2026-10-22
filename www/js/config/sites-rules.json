@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
   "sites": {
     "lemonde.fr": {
@@ -135,7 +135,7 @@
     "le1hebdo.fr": {
       "name": "Le 1 Hebdo",
       "contentSelector": "div.article-intro, .article-intro, div.article-text",
-      "removeSelector": ".article-top, .article-settings, .latest-newspaper-posts, #all-newspaper, #newspaper-summary, .bloc-partage, .qiota-wrapper, .qiota-container, [id*='qiota'], .qiota_onboard",
+      "removeSelector": ".article-top, .article-settings, .latest-newspaper-posts, #all-newspaper, #newspaper-summary, .bloc-partage, .article-time svg, .qiota-wrapper, .qiota-container, [id*='qiota'], .qiota_onboard",
       "paragraphSelector": "p",
       "minParagraphs": 3,
       "minTextLength": 1000
