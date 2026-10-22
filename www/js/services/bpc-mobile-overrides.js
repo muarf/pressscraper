@@ -490,6 +490,24 @@
     } catch(e) { console.error('[BPC MOBILE] lejdd.fr error:', e); }
 })();`;
             }
+        },
+
+        // ----------------------------------------------------------------
+        // Challenges & Sciences et Avenir (Groupe Perdriel)
+        // ----------------------------------------------------------------
+        {
+            domains: ['challenges.fr', 'sciencesetavenir.fr'],
+            script: function(articleUrl, articlePathname, articleOrigin) {
+                return `(function() {
+    try {
+        var poool = document.querySelectorAll('#poool-widget, .poool-widget, .paywall-article');
+        poool.forEach(function(el) { el.remove(); });
+        var sidebar = document.querySelectorAll('.views-article-sidebar, .views-article__sticky-wrapper, .views-article__buttons--desktop, .views-article__buttons--mobile, [class*="feed-item-carousel"], a[href*="google.com"]');
+        sidebar.forEach(function(el) { el.remove(); });
+        console.log('[BPC MOBILE] challenges: removed poool widget, sidebars and carousels');
+    } catch(e) { console.error('[BPC MOBILE] challenges error:', e); }
+})();`;
+            }
         }
     ];
 

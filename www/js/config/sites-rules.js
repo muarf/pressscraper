@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 13,
+        version: 15,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -88,9 +88,11 @@
             },
             "challenges.fr": {
                 name: "Challenges",
-                contentSelector: "article, .article-content, div[class*='article__content']",
+                contentSelector: "div.views-article__page-content, .views-article__page-content, div.views-article__content, .views-article__text, article",
+                removeSelector: ".views-article__sticky-wrapper, .views-article__buttons--desktop, .views-article__buttons--mobile, .views-article-sidebar, .poool-widget, .paywall-article, [class*='ad-placeholder'], [class*='placeholder'], [class*='logora'], div#poool-widget, a[href*='google.com'], [class*='feed-item-carousel']",
+                paragraphSelector: "p",
                 minParagraphs: 4,
-                minTextLength: 1500
+                minTextLength: 1200
             },
             "alternatives-economiques.fr": {
                 name: "Alternatives Économiques",
