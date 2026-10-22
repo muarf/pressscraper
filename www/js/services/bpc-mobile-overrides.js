@@ -314,6 +314,44 @@
     } catch(e) { console.error('[BPC MOBILE] telerama override error:', e); }
 })();`;
             }
+        },
+
+        // ----------------------------------------------------------------
+        // Franc-Tireur
+        // ----------------------------------------------------------------
+        {
+            domains: ['franc-tireur.fr'],
+            script: function(articleUrl, articlePathname, articleOrigin) {
+                return `(function() {
+    try {
+        var pw = document.querySelectorAll('div#poool-widget-content, #poool-widget, div[id*="poool"]');
+        pw.forEach(function(el) { el.remove(); });
+        var article = document.querySelector('section.article-body') || document.querySelector('article');
+        if (article) {
+            var jsonScript = typeof getArticleJsonScript === 'function' ? getArticleJsonScript() : null;
+            if (!jsonScript) {
+                var scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                jsonScript = Array.prototype.find.call(scripts, function(s) {
+                    return (s.text || s.textContent || '').includes('"articleBody"');
+                });
+            }
+            if (jsonScript) {
+                var json = JSON.parse(jsonScript.text || jsonScript.textContent);
+                if (json && json.articleBody) {
+                    var rawText = json.articleBody;
+                    var formatted = rawText.replace(/\\s\\?/g, '?').split(/\\n\\n+/).map(function(p) {
+                        return '<p>' + DOMPurify.sanitize(p.trim(), dompurify_options) + '</p>';
+                    }).join('');
+                    article.innerHTML = formatted;
+                    article.setAttribute('id', 'js-article-content');
+                    document.querySelectorAll('article.promoted-article, .promoted-article').forEach(function(el) { el.remove(); });
+                    console.log('[BPC MOBILE] franc-tireur: injected full article from JSON-LD, length:', article.textContent.length);
+                }
+            }
+        }
+    } catch(e) { console.error('[BPC MOBILE] franc-tireur error:', e); }
+})();`;
+            }
         }
     ];
 

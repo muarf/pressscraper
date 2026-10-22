@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
   "sites": {
     "lemonde.fr": {
@@ -178,6 +178,13 @@
       "contentSelector": "article.article__page-content, article, div.article__content",
       "paywallSelector": "section.paywall, div.paywall",
       "paragraphSelector": "article.article__page-content p, article p",
+      "minParagraphs": 3,
+      "minTextLength": 1000
+    },
+    "franc-tireur.fr": {
+      "name": "Franc-Tireur",
+      "contentSelector": "#js-article-content, section.article-body, article.article, .article-body",
+      "paywallSelector": "div#poool-widget-content, #poool-widget, div[id*='poool']",
       "minParagraphs": 3,
       "minTextLength": 1000
     }

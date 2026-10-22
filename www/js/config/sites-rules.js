@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 6,
+        version: 7,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -197,6 +197,13 @@
                 contentSelector: "article.article__page-content, article, div.article__content",
                 paywallSelector: "section.paywall, div.paywall",
                 paragraphSelector: "article.article__page-content p, article p",
+                minParagraphs: 3,
+                minTextLength: 1000
+            },
+            "franc-tireur.fr": {
+                name: "Franc-Tireur",
+                contentSelector: "#js-article-content, section.article-body, article.article, .article-body",
+                paywallSelector: "div#poool-widget-content, #poool-widget, div[id*='poool']",
                 minParagraphs: 3,
                 minTextLength: 1000
             }
