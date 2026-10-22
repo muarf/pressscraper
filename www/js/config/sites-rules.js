@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 3,
+        version: 4,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -157,6 +157,45 @@
                 name: "Le 1 Hebdo",
                 contentSelector: "article, .article-content, div[class*='article']",
                 removeSelector: ".qiota-wrapper, .qiota-container, [id*='qiota']",
+                minParagraphs: 3,
+                minTextLength: 1000
+            },
+            "60millions-mag.com": {
+                name: "60 Millions de consommateurs",
+                contentSelector: "article, .article-news__col-left, div[class*='article-news']",
+                minParagraphs: 3,
+                minTextLength: 1000
+            },
+            "actu.fr": {
+                name: "Actu.fr",
+                contentSelector: "article, .js-article-inner, .article-body",
+                minParagraphs: 2,
+                minTextLength: 800
+            },
+            "ladepeche.fr": {
+                name: "Groupe La Dépêche",
+                aliases: ["midilibre.fr", "lindependant.fr", "centrepresseaveyron.fr", "petitbleu.fr", "nrpyrenees.fr"],
+                contentSelector: "article, .article-full, .content-article, div[class*='article']",
+                minParagraphs: 3,
+                minTextLength: 1000
+            },
+            "leprogres.fr": {
+                name: "Groupe EBRA",
+                aliases: ["dna.fr", "lalsace.fr", "estrepublicain.fr", "republicain-lorrain.fr", "vosgesmatin.fr"],
+                contentSelector: "article, .richcontent, .article-body, div[class*='richcontent']",
+                minParagraphs: 3,
+                minTextLength: 1000
+            },
+            "elle.fr": {
+                name: "Elle Magazine",
+                contentSelector: "article, .article, .js-article, div[class*='article__content']",
+                minParagraphs: 2,
+                minTextLength: 800
+            },
+            "lalibre.be": {
+                name: "Groupe IPM (La Libre Belgique)",
+                aliases: ["dhnet.be", "moustique.be"],
+                contentSelector: "article, .ap-Story, .article-body, div[class*='article']",
                 minParagraphs: 3,
                 minTextLength: 1000
             }

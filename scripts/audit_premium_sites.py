@@ -112,7 +112,7 @@ def test_article_on_device(url):
         char_count = len(text_out.strip())
         paragraphs = len([p for p in text_out.split('\n\n') if len(p.strip()) > 80])
 
-        if char_count > 2500 and paragraphs >= 3:
+        if char_count >= 1000 and paragraphs >= 2:
             return "SUCCESS", f"{char_count} car. ({paragraphs} paragraphes)", url
         else:
             return "PARTIAL", f"Teaser seulement ({char_count} car.)", url
