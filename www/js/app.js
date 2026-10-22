@@ -954,14 +954,16 @@
         let selector = ctx.selector || '';
 
         // Si on est dans le contexte d'un article en base
-        if (!url && state.currentArticleId) {
+        let currentArt = null;
+        if (state.currentArticleId) {
             try {
-                const art = await window.DB.getArticleFromDb(state.currentArticleId);
-                if (art) {
-                    url = art.url || '';
-                    if (!htmlSnippet) {
-                        htmlSnippet = (art.content || art.html || '').substring(0, 1500);
-                        contentLength = (art.content || art.html || '').length;
+                currentArt = await window.DB.getArticleFromDb(state.currentArticleId);
+                if (currentArt) {
+                    if (!url) url = currentArt.url || '';
+                    const fullHtml = currentArt.html_content || currentArt.content || currentArt.html || '';
+                    if (!htmlSnippet && fullHtml) {
+                        htmlSnippet = fullHtml.substring(0, 1500);
+                        contentLength = fullHtml.length;
                     }
                 }
             } catch (_) {}
@@ -970,12 +972,26 @@
         // Sinon vérification sur la dernière tentative de scraping
         const attempt = window._lastScrapeAttempt || {};
         if (!url) url = attempt.url || document.getElementById('urlInput')?.value || '';
-        if (!trace && attempt.logs) {
-            trace = attempt.logs.join('\n');
-            if (attempt.error) trace += '\n\nErreur: ' + attempt.error + (attempt.stack ? '\n' + attempt.stack : '');
-        }
         if (!htmlSnippet && attempt.htmlSnippet) htmlSnippet = attempt.htmlSnippet;
         if (!contentLength && attempt.contentLength) contentLength = attempt.contentLength;
+
+        // Construction d'une trace riche
+        if (!trace) {
+            const traceParts = [];
+            if (attempt.logs && attempt.logs.length > 0) {
+                traceParts.push(attempt.logs.join('\n'));
+            }
+            if (attempt.error) {
+                traceParts.push('Erreur: ' + attempt.error + (attempt.stack ? '\n' + attempt.stack : ''));
+            }
+            if (currentArt) {
+                traceParts.push(`[ARTICLE] Titre: ${currentArt.title || 'N/A'}`);
+                traceParts.push(`[ARTICLE] Source: ${currentArt.site_source || currentArt.publication || 'Presse'}`);
+                traceParts.push(`[ARTICLE] Service: ${currentArt.service_used || 'BPC'}`);
+                traceParts.push(`[ARTICLE] Longueur: ${(currentArt.html_content || '').length} car.`);
+            }
+            trace = traceParts.join('\n\n');
+        }
 
         // Détection sélecteur configuré
         if (url && window.SitesRules) {
