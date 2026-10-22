@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 18,
+        version: 19,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -96,7 +96,9 @@
             },
             "alternatives-economiques.fr": {
                 name: "Alternatives Économiques",
-                contentSelector: "article, .article__content, div[class*='article-body']",
+                contentSelector: "article.ae-article, article, .article__content, div[class*='article-body']",
+                paywallSelector: "#poool-widget, div[id*='poool']",
+                removeSelector: "aside.ae-article__aside, footer.ae-article__footer, div.article-header__rubriques, div.article-header__buttons, div.dialog-graphique-wrapper, .share-btn, .share-popin, #poool-widget",
                 minParagraphs: 3,
                 minTextLength: 1200
             },

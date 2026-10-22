@@ -520,6 +520,40 @@
         },
 
         // ----------------------------------------------------------------
+        // Alternatives Économiques
+        // ----------------------------------------------------------------
+        {
+            domains: ['alternatives-economiques.fr'],
+            script: function(articleUrl, articlePathname, articleOrigin) {
+                return `(function() {
+    try {
+        var poool = document.querySelectorAll('#poool-widget, .poool-widget, div[id*="poool"]');
+        poool.forEach(function(el) { el.remove(); });
+        var junk = document.querySelectorAll('aside.ae-article__aside, footer.ae-article__footer, div.article-header__rubriques, div.article-header__buttons, div.dialog-graphique-wrapper, .share-btn, .share-popin');
+        junk.forEach(function(el) { el.remove(); });
+        var imgs = document.querySelectorAll('img');
+        imgs.forEach(function(img) {
+            var src = img.getAttribute('src');
+            if (src && src.startsWith('/')) {
+                img.src = 'https://www.alternatives-economiques.fr' + src;
+            }
+            var srcset = img.getAttribute('srcset');
+            if (srcset) {
+                img.setAttribute('srcset', srcset.replace(/(^|,\\s*)\\//g, '$1https://www.alternatives-economiques.fr/'));
+            }
+            var dataSrc = img.getAttribute('data-src');
+            if (dataSrc) {
+                img.src = dataSrc.startsWith('/') ? ('https://www.alternatives-economiques.fr' + dataSrc) : dataSrc;
+                img.removeAttribute('data-src');
+            }
+        });
+        console.log('[BPC MOBILE] alternatives-economiques: removed poool widget, junk, and resolved relative images');
+    } catch(e) { console.error('[BPC MOBILE] alternatives-economiques error:', e); }
+})();`;
+            }
+        },
+
+        // ----------------------------------------------------------------
         // Charlie Hebdo
         // ----------------------------------------------------------------
         // WordPress REST API provides full article text via internal app key.
