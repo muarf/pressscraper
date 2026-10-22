@@ -448,6 +448,48 @@
     } catch(e) { console.error('[BPC MOBILE] capital.fr error:', e); }
 })();`;
             }
+        },
+
+        // ----------------------------------------------------------------
+        // Le Journal du Dimanche (lejdd.fr)
+        // ----------------------------------------------------------------
+        {
+            domains: ['lejdd.fr'],
+            script: function(articleUrl, articlePathname, articleOrigin) {
+                return `(function() {
+    try {
+        // Supprimer immédiatement les recommandations parasites qui contiennent des balises <article>
+        document.querySelectorAll('article.reco-article-light, article.reco-article, .reco-article, .reco-article-light').forEach(function(el) {
+            el.remove();
+        });
+
+        // Supprimer le widget Poool et Taboola
+        var pw = document.querySelectorAll('div#poool-widget, #poool-widget, div[id*="poool"], #taboola, [id*="taboola"]');
+        pw.forEach(function(el) { el.remove(); });
+
+        // Marquer l'article principal
+        var mainArt = document.querySelector('main > article') || document.querySelector('section.content-rte');
+        if (mainArt) {
+            mainArt.setAttribute('id', 'js-article-content');
+        }
+
+        // S'assurer que le contenu premium est visible
+        var prem = document.querySelectorAll('.premium, .premium-rte');
+        prem.forEach(function(el) {
+            el.removeAttribute('hidden');
+            el.style.display = 'block';
+            el.style.visibility = 'visible';
+            el.style.filter = 'none';
+        });
+
+        // Supprimer les pubs, boutons de partage et "À lire aussi"
+        var garbage = document.querySelectorAll('.block-share, .readtoo, [class*="ads-core-placer"], [class*="lmn-"]');
+        garbage.forEach(function(el) { el.remove(); });
+
+        console.log('[BPC MOBILE] lejdd.fr: identified main article, removed poool and reco articles');
+    } catch(e) { console.error('[BPC MOBILE] lejdd.fr error:', e); }
+})();`;
+            }
         }
     ];
 

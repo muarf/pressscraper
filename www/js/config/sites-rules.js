@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 7,
+        version: 8,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -118,9 +118,10 @@
             },
             "lejdd.fr": {
                 name: "Le Journal du Dimanche",
-                contentSelector: "article, div[class*='article-body'], .article-content, div.article__content",
-                paywallSelector: ".forbidden, div.paywall",
-                removeSelector: ".forbidden, div.premium-hidden, div.p-aside--placeholder, section.outbrain-container",
+                contentSelector: "#js-article-content, main > article, section.content-rte, div[class*='article-body']",
+                removeSelector: "ul.block-share, .block-share, div.readtoo, div#poool-widget, #poool-widget, div#taboola, [class*='ads-core-placer'], [class*='lmn-'], article.reco-article-light, article.reco-article, .reco-article-light, .reco-article",
+                paywallSelector: "div#poool-widget, #poool-widget, div[id*='poool']",
+                paragraphSelector: "p",
                 minParagraphs: 3,
                 minTextLength: 1200
             },
