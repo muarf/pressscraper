@@ -576,14 +576,21 @@
         if (!contentEl) contentEl = iframeDocument.querySelector('article') || iframeDocument.querySelector('[itemprop="articleBody"]') || iframeDocument.querySelector('.article-body') || iframeDocument.querySelector('.article') || iframeDocument.body;
         console.log('[BPC DEBUG] contentEl tag:', contentEl?.tagName, 'class:', contentEl?.className, 'len:', contentEl?.innerHTML?.length);
 
-        const hasPaywall = iframeDocument.querySelector(paywallSelector);
         const textLength = contentEl ? contentEl.textContent.trim().length : 0;
+        const pendingAsync = iframeWindow.pendingAsyncRequests || 0;
 
-        // Piste 2 : Rejet si paywall détecté OU si le contenu extrait est trop court et non structuré
-        const hasStructuredArticle = iframeDocument.querySelector('article, [itemprop="articleBody"], .article-body, .article');
-        if ((hasPaywall && textLength < 800) || (textLength < 800 && !hasStructuredArticle)) {
+        // Validation stricte : rejet catégorique si le paywall est encore actif ou si les seuils de qualité ne sont pas atteints
+        let isSuccess = false;
+        if (window.SitesRules) {
+            isSuccess = window.SitesRules.checkBypassSuccess(siteRule, iframeDocument, textLength, pendingAsync);
+        } else {
+            const hasPaywall = !!iframeDocument.querySelector(paywallSelector);
+            isSuccess = !hasPaywall && textLength > 800 && pendingAsync === 0;
+        }
+
+        if (!isSuccess) {
             iframe.remove();
-            throw new Error('Contenu protégé ou insuffisant non accessible');
+            throw new Error('Paywall actif ou contenu insuffisant non débloqué');
         }
 
         // Nettoyage des éléments parasites configurés pour ce média (partage, fils d'ariane, bandeaux)

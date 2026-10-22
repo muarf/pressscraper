@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 4,
+        version: 5,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -118,7 +118,8 @@
             },
             "lecanardenchaine.fr": {
                 name: "Le Canard enchaîné",
-                contentSelector: "article, .article-content, div[class*='article-body']",
+                contentSelector: "#js-article .editorial, #js-article, article, .article-content",
+                paywallSelector: "div#paywall, div.paywall, .p3-widget, [class*='paywall']",
                 removeSelector: ".list-breadcrumb, .share-sticky, .no-xsmall, #share-sticky-pixel-to-watch, [class*='share'], .smaller-font, .sr-only, .visually-hidden",
                 minParagraphs: 3,
                 minTextLength: 1000

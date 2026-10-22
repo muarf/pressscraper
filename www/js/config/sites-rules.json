@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
   "sites": {
     "lemonde.fr": {
@@ -99,7 +99,8 @@
     },
     "lecanardenchaine.fr": {
       "name": "Le Canard enchaîné",
-      "contentSelector": "article, .article-content, div[class*='article-body']",
+      "contentSelector": "#js-article .editorial, #js-article, article, .article-content",
+      "paywallSelector": "div#paywall, div.paywall, .p3-widget, [class*='paywall']",
       "removeSelector": ".list-breadcrumb, .share-sticky, .no-xsmall, #share-sticky-pixel-to-watch, [class*='share'], .smaller-font, .sr-only, .visually-hidden",
       "minParagraphs": 3,
       "minTextLength": 1000
