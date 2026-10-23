@@ -570,6 +570,40 @@
         },
 
         // ----------------------------------------------------------------
+        // 60 Millions de consommateurs
+        // ----------------------------------------------------------------
+        {
+            domains: ['60millions-mag.com'],
+            script: function(articleUrl, articlePathname, articleOrigin) {
+                return `(function() {
+    try {
+        var poool = document.querySelectorAll('#poool-widget, .poool-widget, div[id*="poool"]');
+        poool.forEach(function(el) { el.remove(); });
+        var junk = document.querySelectorAll('nav.breadcrumb, .article-header__actions, .share-article__wrapper, .accessibility-modal');
+        junk.forEach(function(el) { el.remove(); });
+        var imgs = document.querySelectorAll('img');
+        imgs.forEach(function(img) {
+            var src = img.getAttribute('src');
+            if (src && src.startsWith('/')) {
+                img.src = 'https://www.60millions-mag.com' + src;
+            }
+            var srcset = img.getAttribute('srcset');
+            if (srcset) {
+                img.setAttribute('srcset', srcset.replace(/(^|,\\s*)\\//g, '$1https://www.60millions-mag.com/'));
+            }
+            var dataSrc = img.getAttribute('data-src');
+            if (dataSrc) {
+                img.src = dataSrc.startsWith('/') ? ('https://www.60millions-mag.com' + dataSrc) : dataSrc;
+                img.removeAttribute('data-src');
+            }
+        });
+        console.log('[BPC MOBILE] 60millions-mag: removed poool widget, breadcrumbs, sharing and resolved relative images');
+    } catch(e) { console.error('[BPC MOBILE] 60millions-mag error:', e); }
+})();`;
+            }
+        },
+
+        // ----------------------------------------------------------------
         // Charlie Hebdo
         // ----------------------------------------------------------------
         // WordPress REST API provides full article text via internal app key.

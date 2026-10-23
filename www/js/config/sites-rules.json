@@ -1,5 +1,5 @@
 {
-  "version": 20,
+  "version": 21,
   "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
   "sites": {
     "lemonde.fr": {
@@ -155,7 +155,9 @@
     },
     "60millions-mag.com": {
       "name": "60 Millions de consommateurs",
-      "contentSelector": "article, .article-news__col-left, div[class*='article-news']",
+      "contentSelector": "article.article-news__col-left, article, div[class*='article-news']",
+      "paywallSelector": "#poool-widget, div[id*='poool']",
+      "removeSelector": "nav.breadcrumb, .article-header__actions, .share-article__wrapper, .accessibility-modal, #poool-widget",
       "minParagraphs": 3,
       "minTextLength": 1000
     },
