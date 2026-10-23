@@ -473,6 +473,17 @@
         document.getElementById(screenId).classList.add('active');
         document.querySelector(`.nav-btn[data-screen="${screenId}"]`)?.classList.add('active');
 
+        const mainHeader = document.querySelector('header.header');
+        const bottomNav = document.querySelector('.bottom-nav');
+        if (screenId === 'articleScreen') {
+            if (mainHeader) mainHeader.style.display = 'none';
+            if (bottomNav) bottomNav.style.display = 'none';
+            window.scrollTo(0, 0);
+        } else {
+            if (mainHeader) mainHeader.style.display = 'flex';
+            if (bottomNav) bottomNav.style.display = 'flex';
+        }
+
         if (screenId === 'historyScreen') renderFullHistory();
         if (screenId === 'settingsScreen') { updateSettingsUI(); startDebugRefresh(); } else { stopDebugRefresh(); }
     };
