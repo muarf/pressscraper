@@ -1,5 +1,5 @@
 {
-  "version": 23,
+  "version": 24,
   "description": "Configuration des règles d'extraction et de contournement pour Presse Scraper",
   "sites": {
     "lemonde.fr": {
@@ -163,7 +163,9 @@
     },
     "actu.fr": {
       "name": "Actu.fr",
-      "contentSelector": "article, .js-article-inner, .article-body",
+      "contentSelector": "article, .col-1__inner, .ac-article-content",
+      "paywallSelector": "#poool-widget:not(:empty), .poool-widget:not(:empty)",
+      "removeSelector": "dl.ac-article-tag, .no-print, .ac-article-actions, .ac-article-to-read, [class*='ac-banner-ad'], .inread, [id*='Inread'], #saooti-player, #poool-widget, #poool-before-chapo, .col-2",
       "minParagraphs": 2,
       "minTextLength": 800
     },

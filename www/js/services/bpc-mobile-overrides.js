@@ -604,6 +604,36 @@
         },
 
         // ----------------------------------------------------------------
+        // Actu.fr
+        // ----------------------------------------------------------------
+        {
+            domains: ['actu.fr'],
+            script: function() {
+                return `(function() {
+    try {
+        var poool = document.querySelectorAll('#poool-widget, .poool-widget, #poool-before-chapo, div[id*="poool"]');
+        poool.forEach(function(el) { el.remove(); });
+        var junk = document.querySelectorAll('dl.ac-article-tag, .no-print, .ac-article-actions, .ac-article-to-read, [class*="ac-banner-ad"], .inread, [id*="Inread"], #saooti-player, .col-2');
+        junk.forEach(function(el) { el.remove(); });
+        var imgs = document.querySelectorAll('img');
+        imgs.forEach(function(img) {
+            var src = img.getAttribute('src');
+            if (src && src.startsWith('/')) {
+                img.src = 'https://actu.fr' + src;
+            }
+            var dataSrc = img.getAttribute('data-src');
+            if (dataSrc) {
+                img.src = dataSrc.startsWith('/') ? ('https://actu.fr' + dataSrc) : dataSrc;
+                img.removeAttribute('data-src');
+            }
+        });
+        console.log('[BPC MOBILE] actu.fr: removed poool, ads, share buttons and related links');
+    } catch(e) { console.error('[BPC MOBILE] actu.fr error:', e); }
+})();`;
+            }
+        },
+
+        // ----------------------------------------------------------------
         // Charlie Hebdo
         // ----------------------------------------------------------------
         // WordPress REST API provides full article text via internal app key.

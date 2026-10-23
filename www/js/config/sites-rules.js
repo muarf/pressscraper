@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 23,
+        version: 24,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -182,7 +182,9 @@
             },
             "actu.fr": {
                 name: "Actu.fr",
-                contentSelector: "article, .js-article-inner, .article-body",
+                contentSelector: "article, .col-1__inner, .ac-article-content",
+                paywallSelector: "#poool-widget:not(:empty), .poool-widget:not(:empty)",
+                removeSelector: "dl.ac-article-tag, .no-print, .ac-article-actions, .ac-article-to-read, [class*='ac-banner-ad'], .inread, [id*='Inread'], #saooti-player, #poool-widget, #poool-before-chapo, .col-2",
                 minParagraphs: 2,
                 minTextLength: 800
             },
