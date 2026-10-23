@@ -19,7 +19,7 @@
     const DEFAULT_CONTENT_SELECTOR = 'article, [itemprop="articleBody"], .article-body, .article';
 
     const DEFAULT_RULES = {
-        version: 21,
+        version: 22,
         sites: {
             "lemonde.fr": {
                 name: "Le Monde",
@@ -176,7 +176,7 @@
                 name: "60 Millions de consommateurs",
                 contentSelector: "article.article-news__col-left, article, div[class*='article-news']",
                 paywallSelector: "#poool-widget, div[id*='poool']",
-                removeSelector: "nav.breadcrumb, .article-header__actions, .share-article__wrapper, .accessibility-modal, #poool-widget",
+                removeSelector: "nav.breadcrumb, .article-header__actions, .share-article__wrapper, .accessibility-modal, .article-related, #poool-widget",
                 minParagraphs: 3,
                 minTextLength: 1000
             },

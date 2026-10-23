@@ -579,7 +579,7 @@
     try {
         var poool = document.querySelectorAll('#poool-widget, .poool-widget, div[id*="poool"]');
         poool.forEach(function(el) { el.remove(); });
-        var junk = document.querySelectorAll('nav.breadcrumb, .article-header__actions, .share-article__wrapper, .accessibility-modal');
+        var junk = document.querySelectorAll('nav.breadcrumb, .article-header__actions, .share-article__wrapper, .accessibility-modal, .article-related');
         junk.forEach(function(el) { el.remove(); });
         var imgs = document.querySelectorAll('img');
         imgs.forEach(function(img) {
